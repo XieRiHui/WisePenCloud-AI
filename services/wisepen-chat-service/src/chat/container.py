@@ -30,7 +30,7 @@ from chat.application.tools import (
     LoadSkillAssetTool,
 )
 from common.clients.file_storage import FileStorageClient
-from common.cloud.nacos_client import nacos_client_manager
+from chat.core.config.nacos import nacos_client_manager
 from common.cloud.service_discovery import ServiceDiscovery
 from common.http.rpc_client import RpcClient
 from common.kafka.producer import KafkaProducerClient

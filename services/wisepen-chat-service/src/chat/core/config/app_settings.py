@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
-from common.cloud.nacos_client import nacos_client_manager
+from chat.core.config.nacos import nacos_client_manager
 from common.logger import log_event, log_error
 
 SERVICE_ROOT = Path(__file__).resolve().parents[4]
