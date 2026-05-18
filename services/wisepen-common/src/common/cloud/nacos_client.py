@@ -88,6 +88,11 @@ class NacosClientManager:
         """向 Nacos 注册当前服务实例。"""
         client = await self.get_naming_client()
         host = self._resolve_host()
+
+        metadata = {"preserved.register.source": "PYTHON_FASTAPI"}
+        if self.bootstrap_settings.DEVELOPER_ENABLE and self.bootstrap_settings.DEVELOPER_NAME:
+            metadata["developer"] = self.bootstrap_settings.DEVELOPER_NAME
+
         try:
             await client.register_instance(
                 request=RegisterInstanceParam(
@@ -95,7 +100,7 @@ class NacosClientManager:
                     group_name=self.bootstrap_settings.NACOS_GROUP,
                     ip=host,
                     port=self.bootstrap_settings.SERVICE_PORT,
-                    metadata={"version": "0.1.0", "framework": "fastapi"},
+                    metadata=metadata,
                     healthy=True,
                     ephemeral=True,
                 )
