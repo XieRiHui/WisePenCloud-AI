@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
@@ -82,7 +82,7 @@ class MongoModelRepository(ModelRepository):
         self,
         model: Model,
         user_id: Optional[str] = None,
-    ) -> ModelInfo:
+    ) -> Model:
         now = datetime.now(timezone.utc)
 
         model.scope = self._scope_for(user_id)
@@ -96,29 +96,39 @@ class MongoModelRepository(ModelRepository):
         except DuplicateKeyError:
             raise ServiceException(ChatErrorCode.MODEL_ALREADY_EXISTS)
 
-        return ModelInfo(model=model, mappings=[])
+        return model
 
     async def update_model(
         self,
-        model_update: Model,
+        model_id: PydanticObjectId,
+        updates: dict[str, Any],
         user_id: Optional[str] = None,
     ) -> Model:
-        if model_update.id is None:
-            raise ServiceException(ChatErrorCode.MODEL_NOT_FOUND)
+        model = await self.get_model(model_id, user_id)
 
-        model = await self.get_model(model_update.id, user_id)
+        if "display_name" in updates:
+            model.display_name = updates["display_name"]
+        if "vendor" in updates:
+            model.vendor = updates["vendor"]
+        if "type" in updates:
+            model.type = updates["type"]
+        if "billing_ratio" in updates:
+            model.billing_ratio = updates["billing_ratio"]
+        if "support_thinking" in updates:
+            model.support_thinking = updates["support_thinking"]
+        if "support_vision" in updates:
+            model.support_vision = updates["support_vision"]
+        if "support_tools" in updates:
+            model.support_tools = updates["support_tools"]
+        if "support_streaming" in updates:
+            model.support_streaming = updates["support_streaming"]
+        if "context_window_tokens" in updates:
+            model.context_window_tokens = updates["context_window_tokens"]
+        if "max_output_tokens" in updates:
+            model.max_output_tokens = updates["max_output_tokens"]
+        if "is_active" in updates:
+            model.is_active = updates["is_active"]
 
-        model.display_name = model_update.display_name
-        model.vendor = model_update.vendor
-        model.type = model_update.type
-        model.billing_ratio = model_update.billing_ratio
-        model.support_thinking = model_update.support_thinking
-        model.support_vision = model_update.support_vision
-        model.support_tools = model_update.support_tools
-        model.support_streaming = model_update.support_streaming
-        model.context_window_tokens = model_update.context_window_tokens
-        model.max_output_tokens = model_update.max_output_tokens
-        model.is_active = model_update.is_active
         model.updated_at = datetime.now(timezone.utc)
 
         try:
@@ -168,17 +178,13 @@ class MongoModelRepository(ModelRepository):
         if provider.type != ProviderType.OPENAI_COMPATIBLE_LLM:
             raise ServiceException(ChatErrorCode.MODEL_PROVIDER_TYPE_UNSUPPORTED)
 
-        now = datetime.now(timezone.utc)
-
-        if is_preferred:
-            await self._clear_preferred_mappings(model_id, user_id, now)
-
         mapping = await ModelProviderMapping.find_one(
             ModelProviderMapping.model_id == model_id,
             ModelProviderMapping.provider_id == provider_id,
             ModelProviderMapping.owner_user_id == user_id,
         )
 
+        now = datetime.now(timezone.utc)
         if mapping is None:
             mapping = ModelProviderMapping(
                 model_id=model_id,
@@ -186,13 +192,15 @@ class MongoModelRepository(ModelRepository):
                 provider_model_name=provider_model_name,
                 owner_user_id=user_id,
                 is_preferred=is_preferred,
-                is_active=is_active,
+                is_active=True,
                 priority=0,
                 created_at=now,
                 updated_at=now,
             )
 
             try:
+                if is_preferred: # 如果设为首选
+                    await self._clear_preferred_mappings(model_id, user_id, now) # 移除其他首选项
                 await mapping.insert()
             except DuplicateKeyError:
                 raise ServiceException(ChatErrorCode.MODEL_MAPPING_ALREADY_EXISTS)
@@ -200,11 +208,16 @@ class MongoModelRepository(ModelRepository):
             return mapping
 
         mapping.provider_model_name = provider_model_name
-        mapping.is_preferred = is_preferred
-        mapping.is_active = is_active
         mapping.updated_at = now
 
+        is_preferred = False if not is_active else is_preferred
+
         try:
+            if is_preferred == True and mapping.is_preferred == False: # 如果设为首选且此前不是首选
+                await self._clear_preferred_mappings(model_id, user_id, now) # 移除其他首选项
+
+            mapping.is_preferred = is_preferred
+            mapping.is_active = is_active
             await mapping.save()
         except DuplicateKeyError:
             raise ServiceException(ChatErrorCode.MODEL_MAPPING_ALREADY_EXISTS)

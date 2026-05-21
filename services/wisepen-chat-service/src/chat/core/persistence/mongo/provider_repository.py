@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, List, Optional
 
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
-from chat.domain.entities.model import ModelProviderMapping, ModelScope
+from chat.domain.entities.model import ModelProviderMapping
 from chat.domain.entities.provider import Provider, ProviderScope
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.repositories.provider_repo import ProviderRepository
@@ -42,8 +42,6 @@ class MongoProviderRepository(ProviderRepository):
             Provider.owner_user_id == user_id,
         ).sort("-is_active", "-updated_at").to_list()
 
-
-
     async def create_provider(
         self,
         provider: Provider,
@@ -54,6 +52,7 @@ class MongoProviderRepository(ProviderRepository):
         provider.scope = self._scope_for(user_id)
         provider.owner_user_id = user_id
         provider.is_active = True
+        provider.api_key_fingerprint = self._mask_api_key(provider.api_key)
         provider.created_at = provider.created_at or now
         provider.updated_at = now
 
@@ -66,19 +65,24 @@ class MongoProviderRepository(ProviderRepository):
 
     async def update_provider(
         self,
-        provider_update: Provider,
+        provider_id: PydanticObjectId,
+        updates: dict[str, Any],
         user_id: Optional[str] = None,
     ) -> Provider:
-        if provider_update.id is None:
-            raise ServiceException(ChatErrorCode.PROVIDER_NOT_FOUND)
+        provider = await self.get_provider(provider_id, user_id)
 
-        provider = await self.get_provider(provider_update.id, user_id)
-        provider.name = provider_update.name
-        provider.api_base_url = provider_update.api_base_url
-        provider.api_key = provider_update.api_key
-        provider.api_key_fingerprint = provider_update.api_key_fingerprint
-        provider.type = provider_update.type
-        provider.is_active = provider_update.is_active
+        if "name" in updates:
+            provider.name = updates["name"]
+        if "api_base_url" in updates:
+            provider.api_base_url = updates["api_base_url"]
+        if "api_key" in updates:
+            provider.api_key = updates["api_key"]
+            provider.api_key_fingerprint = self._mask_api_key(updates["api_key"])
+        if "type" in updates:
+            provider.type = updates["type"]
+        if "is_active" in updates:
+            provider.is_active = updates["is_active"]
+
         provider.updated_at = datetime.now(timezone.utc)
 
         try:
@@ -109,3 +113,10 @@ class MongoProviderRepository(ProviderRepository):
     @staticmethod
     def _scope_for(user_id: Optional[str]) -> ProviderScope:
         return ProviderScope.USER if user_id is not None else ProviderScope.SYSTEM
+
+    @staticmethod
+    def _mask_api_key(api_key: str) -> str:
+        if len(api_key) <= 8:
+            return "*" * len(api_key)
+
+        return f"{api_key[:4]}***{api_key[-4:]}"

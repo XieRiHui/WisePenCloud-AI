@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from beanie import PydanticObjectId
 
@@ -24,7 +24,7 @@ class ModelRequestInfo:
     provider: Provider
 
     @property
-    def model_id(self) -> int:
+    def model_id(self) -> PydanticObjectId:
         return self.model.id
 
     @property
@@ -83,14 +83,20 @@ class ModelRepository(ABC):
     async def list_models_by_provider_id(self, provider_id: PydanticObjectId, user_id: Optional[str] = None) -> List[ModelInfo]: pass
 
     @abstractmethod
-    async def create_model(self, model: Model, user_id: Optional[str] = None) -> ModelInfo: pass
+    async def create_model(self, model: Model, user_id: Optional[str] = None) -> Model: pass
 
     @abstractmethod
-    async def update_model(self, model: Model, user_id: Optional[str] = None) -> Model: pass
+    async def update_model(
+        self,
+        model_id: PydanticObjectId,
+        updates: dict[str, Any],
+        user_id: Optional[str] = None,
+    ) -> Model: pass
 
     @abstractmethod
     async def delete_model(self, model_id: PydanticObjectId, user_id: Optional[str] = None) -> None: pass
 
+    @abstractmethod
     async def bind_model_to_provider(
         self,
         model_id: PydanticObjectId,
@@ -103,6 +109,7 @@ class ModelRepository(ABC):
     ) -> ModelProviderMapping:
         pass
 
+    @abstractmethod
     async def unbind_model_from_provider(
         self,
         model_id: PydanticObjectId,

@@ -17,6 +17,8 @@ from chat.core.persistence import (
     MongoSessionRepository,
     MongoMessageRepository,
     MongoSkillRepository,
+    MongoModelRepository,
+    MongoProviderRepository,
     RedisHotContext,
 )
 from chat.application.model_resolver import ModelResolver
@@ -56,6 +58,8 @@ class Container(containers.DeclarativeContainer):
 
     session_repo = providers.Singleton(MongoSessionRepository)
     message_repo = providers.Singleton(MongoMessageRepository)
+    model_repo = providers.Singleton(MongoModelRepository)
+    provider_repo = providers.Singleton(MongoProviderRepository)
     hot_context_repo = providers.Singleton(RedisHotContext)
 
     # 内部 RPC：Nacos 服务发现 + 通用 httpx 客户端 + file-storage typed facade
