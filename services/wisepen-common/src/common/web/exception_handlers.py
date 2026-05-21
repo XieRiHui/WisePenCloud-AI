@@ -19,7 +19,7 @@ def setup_global_exception_handlers(app: FastAPI, is_dev: bool = False):
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        err_msg = exc.errors()[0].get_published_skill("msg") if exc.errors() else "参数错误"
+        err_msg = exc.errors()[0].get("msg") if exc.errors() else "参数错误"
         log_fail("请求参数校验", err_msg, path=request.url.path)
         return JSONResponse(
             status_code=400,
