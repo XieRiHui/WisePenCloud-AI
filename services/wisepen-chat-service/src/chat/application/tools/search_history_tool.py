@@ -3,11 +3,19 @@ from typing import Dict, Any, Optional
 from common.logger import log_error
 
 from chat.core.config.app_settings import settings
-from chat.domain.interfaces.tool import BaseTool
+from chat.application.tools.core import (
+    ToolBusinessError,
+    ToolDefinition,
+    ToolExecutionRequest,
+    ToolLLMSpec,
+    ToolRiskLevel,
+    ToolExecutionStatus,
+    ToolRuntimePolicy,
+)
 from chat.domain.repositories import MessageRepository
 
 
-class SearchHistoricalMessagesTool(BaseTool):
+class SearchHistoricalMessagesTool:
     """
     历史消息全文检索工具。
     Schema 中不暴露 session_id，该字段由系统通过 context 强注入，防止 LLM 幻觉伪造导致越权访问。
@@ -15,24 +23,8 @@ class SearchHistoricalMessagesTool(BaseTool):
 
     def __init__(self, message_repo: MessageRepository) -> None:
         self._message_repo = message_repo
-
-    @property
-    def name(self) -> str:
-        return "search_historical_messages"
-
-    @property
-    def description(self) -> str:
-        return (
-            "Search historical chat messages by keyword and optional time range. "
-            "Use this when you need to recall specific facts, events, or details "
-            "from earlier in the conversation that may not be in the current context window."
-            "NOTE that the search keyword's language should match the user's chat language; otherwise, the search may fail. If no results are found, consider switching the keyword's language."
-        )
-
-    @property
-    def parameters_schema(self) -> Dict[str, Any]:
         # session_id 故意不暴露，由系统通过 context 注入
-        return {
+        parameters_schema: Dict[str, Any] = {
             "type": "object",
             "properties": {
                 "keyword": {
@@ -55,16 +47,48 @@ class SearchHistoricalMessagesTool(BaseTool):
             },
             "required": ["keyword"],
         }
+        self._definition = ToolDefinition(
+            llm_spec=ToolLLMSpec(
+                name="search_historical_messages",
+                description=(
+                    "Search historical chat messages by keyword and optional time range. "
+                    "Use this when you need to recall specific facts, events, or details "
+                    "from earlier in the conversation that may not be in the current context window."
+                    "NOTE that the search keyword's language should match the user's chat language; otherwise, the search may fail. If no results are found, consider switching the keyword's language."
+                ),
+                parameters_schema=parameters_schema,
+            ),
+            runtime_policy=ToolRuntimePolicy(
+                risk_level=ToolRiskLevel.LOW,
+                required_context_keys=("session_id",),
+                timeout_seconds=5.0,
+                max_output_chars=settings.TOOL_RESULT_MAX_CHARS,
+            ),
+        )
 
-    async def execute(self, context: Dict[str, Any], **kwargs) -> str:
+    @property
+    def definition(self) -> ToolDefinition:
+        return self._definition
+
+    async def execute(self, request: ToolExecutionRequest) -> str:
+        context = request.context
+        kwargs = request.invocation.input
         # session_id 从系统注入的 context 读取
         session_id: Optional[str] = context.get("session_id")
         if not session_id:
-            return "[Tool Error] Missing session_id in execution context."
+            raise ToolBusinessError(
+                "missing_session_id",
+                "Missing session_id in execution context.",
+                status=ToolExecutionStatus.DENIED,
+            )
 
         keyword: str = kwargs.get("keyword", "").strip()
         if not keyword:
-            return "[Tool Error] Missing required argument: keyword."
+            raise ToolBusinessError(
+                "missing_keyword",
+                "Missing required argument: keyword.",
+                status=ToolExecutionStatus.INVALID_INPUT,
+            )
 
         start_time: Optional[datetime] = None
         end_time: Optional[datetime] = None
@@ -84,7 +108,12 @@ class SearchHistoricalMessagesTool(BaseTool):
                                                                        limit=limit)
         except Exception as e:
             log_error("历史消息全文检索", e, session=session_id, keyword=keyword)
-            return f"[Tool Error] Search failed: {e}"
+            raise ToolBusinessError(
+                "history_search_failed",
+                f"Search failed: {type(e).__name__}",
+                detail=str(e),
+                retryable=True,
+            ) from e
 
         if not results:
             return f"[Tool Result] No messages found for keyword: '{keyword}'."

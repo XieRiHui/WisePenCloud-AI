@@ -8,7 +8,7 @@ from chat.api.vercel_formats import (
     reasoning_start, reasoning_delta, reasoning_end,
     tool_input_start, tool_input_available, tool_output_available,
 )
-from chat.application.query_loop_runtime import (
+from chat.application.events import (
     StreamEvent,
     StepStartEvent, StepFinishEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,

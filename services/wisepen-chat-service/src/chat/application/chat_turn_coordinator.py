@@ -10,16 +10,16 @@ from chat.domain.interfaces.memory import MemoryProvider
 from chat.domain.repositories import SessionRepository, MessageRepository, HotContextRepository, ModelRepository, ProviderRepository
 from common.core.exceptions import ServiceException
 from chat.application.chat_context_assembler import ChatContextAssembler
-from chat.application.query_loop_runtime import (
-    QueryLoopRuntime,
+from chat.application.query_loop_runtime import QueryLoopRuntime
+from chat.application.events import (
+    ReasoningDeltaEvent,
     StepStartEvent,
     TextDeltaEvent,
-    ReasoningDeltaEvent,
 )
 from chat.api.vercel_sse_mapper import to_vercel_sse
 from chat.application.chat_turn_finalizer import ChatTurnFinalizer
 from chat.application.skill_matcher import SkillMatcher
-from chat.application.tools.tool_registry import ToolRegistry
+from chat.application.tools.core import ToolRegistry
 from common.kafka.producer import KafkaProducerClient
 
 
