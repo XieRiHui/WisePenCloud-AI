@@ -1,8 +1,7 @@
-import asyncio
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Dict, List, Any, Optional, Iterator, AsyncIterator, Tuple, Union
+from typing import Dict, List, Optional, Iterator, AsyncIterator, Union
 
 from beanie import PydanticObjectId
 
@@ -12,110 +11,32 @@ from chat.domain.entities import ChatMessage, Role
 from chat.domain.interfaces import LLMProvider
 from chat.domain.error_codes import ChatErrorCode
 from common.core.exceptions import ServiceException
-from chat.application.tools.tool_scope import ToolScope
-
-
-# =============================================================================
-# QueryLoopRuntime 领域事件
-# =============================================================================
-
-@dataclass(frozen=True)
-class StreamEvent:
-    """QueryLoopRuntime 产出的领域事件基类。"""
-    pass
-
-
-@dataclass(frozen=True)
-class StepStartEvent(StreamEvent):
-    """一个 agent step 开始。coordinator 借此重置 reasoning 累加缓冲。"""
-    pass
-
-
-@dataclass(frozen=True)
-class StepFinishEvent(StreamEvent):
-    """一个 agent step 结束。"""
-    pass
-
-
-@dataclass(frozen=True)
-class TextStartEvent(StreamEvent):
-    """开始一段普通文本流。"""
-    text_id: str
-
-
-@dataclass(frozen=True)
-class TextDeltaEvent(StreamEvent):
-    """普通文本增量。delta 为纯文本，供 coordinator 累加进最终回答以用于持久化。"""
-    text_id: str
-    delta: str
-
-
-@dataclass(frozen=True)
-class TextEndEvent(StreamEvent):
-    """结束一段普通文本流。"""
-    text_id: str
-
-
-@dataclass(frozen=True)
-class ReasoningStartEvent(StreamEvent):
-    """开始一段推理/思考文本流。"""
-    reasoning_id: str
-
-
-@dataclass(frozen=True)
-class ReasoningDeltaEvent(StreamEvent):
-    """推理/思考增量。delta 为纯文本，供 coordinator 累加进 reasoning 内容。"""
-    reasoning_id: str
-    delta: str
-
-
-@dataclass(frozen=True)
-class ReasoningEndEvent(StreamEvent):
-    """结束一段推理/思考文本流。"""
-    reasoning_id: str
-
-
-@dataclass(frozen=True)
-class ToolInputStartEvent(StreamEvent):
-    """工具调用 input 阶段开始（id + name 已识别，args 未必齐）。"""
-    call_id: str
-    tool_name: str
-
-
-@dataclass(frozen=True)
-class ToolInputAvailableEvent(StreamEvent):
-    """工具调用 input 阶段完成，args 已解析完毕。"""
-    call_id: str
-    tool_name: str
-    input: Dict[str, Any]
-
-
-@dataclass(frozen=True)
-class ToolOutputAvailableEvent(StreamEvent):
-    """工具执行完成，output 已产出。"""
-    call_id: str
-    output: Any
+from chat.application.events import (
+    ReasoningDeltaEvent,
+    ReasoningEndEvent,
+    ReasoningStartEvent,
+    StepFinishEvent,
+    StepStartEvent,
+    StreamEvent,
+    TextDeltaEvent,
+    TextEndEvent,
+    TextStartEvent,
+    ToolInputAvailableEvent,
+    ToolInputStartEvent,
+    ToolOutputAvailableEvent,
+)
+from chat.application.tools.core import (
+    ToolBatchReducer,
+    ToolCallAccumulator,
+    ToolCallParser,
+    ToolDispatcher,
+    ToolScope,
+)
 
 
 # =============================================================================
 # 内部数据结构
 # =============================================================================
-
-@dataclass
-class _ToolCallAccumulator:
-    """在流式 delta 中按 index 分槽累积单个 tool_call 的碎片。"""
-    id: str = ""
-    name: str = ""
-    arguments: str = ""
-
-
-@dataclass(frozen=True)
-class _ParsedToolCall:
-    """对 _ToolCallAccumulator 做 JSON 解析、降级后的结果。"""
-    id: str
-    name: str
-    args: Dict[str, Any]
-
 
 @dataclass(frozen=True)
 class _StepTerminal:
@@ -140,7 +61,7 @@ class _StepDeltaInterpreter:
         self.reasoning_id = reasoning_id
         self.assistant_content: str = ""
         self.assistant_reasoning: str = ""
-        self.accumulators: Dict[int, _ToolCallAccumulator] = {}
+        self.accumulators: Dict[int, ToolCallAccumulator] = {}
         self._text_started: bool = False
         self._reasoning_started: bool = False
 
@@ -188,7 +109,7 @@ class _StepDeltaInterpreter:
                 # 按 index 找到对应 accumulator
                 idx = tool_call_delta.index
                 if idx not in self.accumulators:
-                    self.accumulators[idx] = _ToolCallAccumulator()
+                    self.accumulators[idx] = ToolCallAccumulator()
                 if tool_call_delta.id: # 累加 id（如果有）
                     self.accumulators[idx].id = tool_call_delta.id 
                 if tool_call_delta.function: # 累加 function（如果有）
@@ -219,6 +140,9 @@ class QueryLoopRuntime:
 
     def __init__(self, llm: LLMProvider) -> None:
         self.llm = llm
+        self._tool_call_parser = ToolCallParser()
+        self._tool_dispatcher = ToolDispatcher()
+        self._tool_batch_reducer = ToolBatchReducer()
 
     """
     ReAct 循环主入口 (QueryLoop)
@@ -327,7 +251,10 @@ class QueryLoopRuntime:
         # 如果有工具调用，则进入工具阶段
 
         # 解析工具调用
-        parsed_tool_calls = self._parse_tool_calls(delta_interpreter.accumulators)
+        invocations = self._tool_call_parser.parse(
+            delta_interpreter.accumulators,
+            iteration=iteration,
+        )
 
         # 构造 assistant 的 tool_calls 消息(OpenAI 协议要求)
         # 放入 new_messages,由 QueryLoopRuntime 外层统一 extend 进 messages
@@ -339,120 +266,54 @@ class QueryLoopRuntime:
             reasoning_content=delta_interpreter.assistant_reasoning or None,
             tool_calls=[
                 {
-                    "id": tool_call.id,
+                    "id": invocation.call_id,
                     "type": "function",
-                    "function": {"name": tool_call.name, "arguments": json.dumps(tool_call.args)},
+                    "function": {
+                        "name": invocation.tool_name,
+                        "arguments": json.dumps(invocation.input),
+                    },
                 }
-                for tool_call in parsed_tool_calls
+                for invocation in invocations
             ],
             ephemeral=False,
         )
         new_messages: List[ChatMessage] = [assistant_msg]
 
-        for tool_call in parsed_tool_calls:
+        for invocation in invocations:
             # 为每个 parsed tool_call 产生两阶段 input 事件（start + available）
-            yield ToolInputStartEvent(call_id=tool_call.id, tool_name=tool_call.name)
+            yield ToolInputStartEvent(
+                call_id=invocation.call_id,
+                tool_name=invocation.tool_name,
+            )
             yield ToolInputAvailableEvent(
-                call_id=tool_call.id, tool_name=tool_call.name, input=tool_call.args
+                call_id=invocation.call_id,
+                tool_name=invocation.tool_name,
+                input=invocation.input,
             )
 
-        # 并发执行，收集 output 事件与 tool 消息
-        output_events, tool_messages = await self._run_tools(
-            parsed_tool_calls=parsed_tool_calls,
-            tool_scope=tool_scope,
-            session_id=session_id,
-        )
-        for ev in output_events:
-            yield ev
-        new_messages.extend(tool_messages)
+        # 通过工具 core 并发执行并归约结果
+        batch = await self._tool_dispatcher.dispatch(invocations, tool_scope)
+        reduced = self._tool_batch_reducer.reduce(batch.results)
+
+        for item in reduced.items:
+            yield ToolOutputAvailableEvent(
+                call_id=item.call_id,
+                output=item.llm_content,
+            )
+            new_messages.append(
+                ChatMessage(
+                    session_id=session_id,
+                    role=Role.TOOL,
+                    tool_call_id=item.call_id,
+                    name=item.tool_name,
+                    content=item.llm_content,
+                    ephemeral=item.ephemeral,
+                )
+            )
 
         # 结束本轮并继续下一轮模型推理（因为调用工具）
         yield StepFinishEvent()
         yield _StepTerminal(should_continue=True, new_messages=new_messages)
-
-    @staticmethod
-    def _parse_tool_calls(
-        accumulators: Dict[int, _ToolCallAccumulator],
-    ) -> List[_ParsedToolCall]:
-        """按流式 index 顺序（模型侧给出的稳定槽位号）解析累积的 tool_call 碎片，JSON 非法时降级为空 dict"""
-        parsed_tool_calls: List[_ParsedToolCall] = []
-        for idx in sorted(accumulators.keys()):
-            acc = accumulators[idx]
-            try:
-                args = json.loads(acc.arguments) if acc.arguments else {}
-            except json.JSONDecodeError:
-                log_fail(
-                    "tool_call arguments 解析 JSON 格式非法，降级为空 dict",
-                    name=acc.name,
-                )
-                args = {}
-            parsed_tool_calls.append(_ParsedToolCall(id=acc.id, name=acc.name, args=args))
-        return parsed_tool_calls
-
-
-    async def _run_tools(
-        self,
-        parsed_tool_calls: List[_ParsedToolCall],
-        tool_scope: ToolScope,
-        session_id: str
-    ) -> Tuple[List[StreamEvent], List[ChatMessage]]:
-        """
-        并行执行所有工具。
-        返回 tool_output_available 事件列表（按 parsed 顺序）和对应的 Role.TOOL 消息列表（按 parsed 顺序）。
-        每条 TOOL 消息独立按对应 tool 的 is_ephemeral_output 打 ephemeral 标，
-        让 Finalizer 在 per-message 粒度上决定是否 redact，避免混合轮次里 skill 正文通过"整轮保守落盘"漏进 durable 历史
-        """
-
-        # 并发执行所有工具，return_exceptions=True 保证单工具失败不中断整轮
-        raw_results = await asyncio.gather(
-            *[self._invoke_tool(tc.name, tool_scope, tc.args) for tc in parsed_tool_calls],
-            return_exceptions=True,
-        )
-
-        # 查出每个 tool call 对应 tool 的 is_ephemeral_output
-        ephemeral_flags: List[bool] = [
-            tool_scope.is_ephemeral(tool_call.name) for tool_call in parsed_tool_calls
-        ]
-
-        # 遍历结果做异常降级
-        events: List[StreamEvent] = []
-        tool_messages: List[ChatMessage] = []
-        for tool_call, result, is_ephemeral in zip(parsed_tool_calls, raw_results, ephemeral_flags):
-            # 如果某个结果是 Exception，转成字符串形式的 [Tool Execution Error]: ... 并记录日志，否则原样使用。
-            # 防止原生 Exception 对象序列化进 API 请求导致异常
-            if isinstance(result, Exception):
-                safe_result = f"[Tool Execution Error]: {type(result).__name__}: {result}"
-                log_fail("工具调用", result, name=tool_call.name, session=session_id)
-            else:
-                safe_result = result
-
-            # 发 ToolOutputAvailableEvent
-            events.append(ToolOutputAvailableEvent(call_id=tool_call.id, output=safe_result))
-            # 构造对话历史中的 Tool 消息
-            tool_messages.append(
-                ChatMessage(
-                    session_id=session_id,
-                    role=Role.TOOL,
-                    tool_call_id=tool_call.id,
-                    name=tool_call.name,
-                    content=safe_result,
-                    ephemeral=is_ephemeral,
-                )
-            )
-        return events, tool_messages
-
-    async def _invoke_tool(
-        self,
-        name: str,
-        tool_scope: ToolScope,
-        args: Dict[str, Any],
-    ) -> str:
-        """按 tool_scope 视图查工具并执行；未在视图内（被 deny 掉或未注册）时降级文本"""
-        tool = tool_scope.get(name)
-        if tool is None:
-            log_fail("工具调用", "工具不在本轮 scope 视图内或未注册", name=name)
-            return f"[Tool Execution Error] Unknown tool: '{name}'."
-        return await tool.execute(context=tool_scope.context, **args)
 
     async def _emit_exhausted_warning(
         self, session_id: str

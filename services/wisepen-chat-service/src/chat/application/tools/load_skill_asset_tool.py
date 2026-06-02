@@ -3,12 +3,21 @@ from typing import Any, Dict
 from common.logger import log_error, log_fail
 
 from chat.core.config.app_settings import settings
+from chat.application.tools.core import (
+    AllowedSkillIdHook,
+    ToolBusinessError,
+    ToolDefinition,
+    ToolExecutionRequest,
+    ToolLLMSpec,
+    ToolExecutionStatus,
+    ToolRiskLevel,
+    ToolRuntimePolicy,
+)
 from chat.domain.interfaces.skill_asset_loader import SkillAssetLoader
-from chat.domain.interfaces.tool import BaseTool
 from chat.domain.repositories import SkillRepository
 
 
-class LoadSkillAssetTool(BaseTool):
+class LoadSkillAssetTool:
     """
     按 skill_id + 相对路径懒加载 Skill Bundle 内的某个资产（reference / template / 示例等）
     skill_id 必须在 tool_context['allowed_skill_ids']（本轮 matcher 命中的白名单）中，否则拒绝加载，防止 LLM 幻觉
@@ -22,23 +31,7 @@ class LoadSkillAssetTool(BaseTool):
     ) -> None:
         self._skill_repo = skill_repo
         self._skill_asset_loader = skill_asset_loader
-
-    @property
-    def name(self) -> str:
-        return "load_skill_asset"
-
-    @property
-    def description(self) -> str:
-        return (
-            "Lazy-load the content of a specific asset (reference, template, example, etc.) "
-            "belonging to a skill that has already been loaded via load_skill. "
-            "You must pass a path that appears in the skill's assets manifest; "
-            "do NOT invent paths. Only call when SKILL.md explicitly tells you to consult that asset."
-        )
-
-    @property
-    def parameters_schema(self) -> Dict[str, Any]:
-        return {
+        parameters_schema: Dict[str, Any] = {
             "type": "object",
             "properties": {
                 "skill_id": {
@@ -52,43 +45,60 @@ class LoadSkillAssetTool(BaseTool):
             },
             "required": ["skill_id", "path"],
         }
+        self._definition = ToolDefinition(
+            llm_spec=ToolLLMSpec(
+                name="load_skill_asset",
+                description=(
+                    "Lazy-load the content of a specific asset (reference, template, example, etc.) "
+                    "belonging to a skill that has already been loaded via load_skill. "
+                    "You must pass a path that appears in the skill's assets manifest; "
+                    "do NOT invent paths. Only call when SKILL.md explicitly tells you to consult that asset."
+                ),
+                parameters_schema=parameters_schema,
+            ),
+            runtime_policy=ToolRuntimePolicy(
+                reserved=True,
+                ephemeral_output=True,
+                risk_level=ToolRiskLevel.MEDIUM,
+                required_context_keys=("allowed_skill_ids",),
+                timeout_seconds=8.0,
+                max_output_chars=settings.TOOL_RESULT_MAX_CHARS,
+            ),
+            input_hooks=(AllowedSkillIdHook(),),
+        )
 
     @property
-    def is_ephemeral_output(self) -> bool:
-        return True
+    def definition(self) -> ToolDefinition:
+        return self._definition
 
-    @property
-    def reserved(self) -> bool:
-        # 系统保留，不应被用户级 deny 屏蔽
-        return True
-
-    async def execute(self, context: Dict[str, Any], **kwargs) -> str:
+    async def execute(self, request: ToolExecutionRequest) -> str:
+        kwargs = request.invocation.input
         skill_id = (kwargs.get("skill_id") or "").strip()
         path = (kwargs.get("path") or "").strip()
         if not skill_id or not path:
-            return "[Tool Error] Missing required arguments: skill_id, path."
-
-        allowed = set(context.get("allowed_skill_ids") or [])
-        if skill_id not in allowed:
-            log_fail(
-                "load_skill_asset 权限校验",
-                "skill_id 不在本轮候选白名单",
-                skill_id=skill_id,
-                path=path,
-                allowed=sorted(allowed),
-            )
-            return (
-                f"[Tool Error] Skill '{skill_id}' is not available in this turn. "
-                f"Allowed: {sorted(allowed) or 'none'}."
+            raise ToolBusinessError(
+                "missing_skill_asset_input",
+                "Missing required arguments: skill_id, path.",
+                status=ToolExecutionStatus.INVALID_INPUT,
             )
 
         try:
             skill = await self._skill_repo.get_published_skill(skill_id)
         except Exception as e:
             log_error("load_skill_asset 查询", e, skill_id=skill_id, path=path)
-            return f"[Tool Error] Failed to query skill '{skill_id}': {type(e).__name__}"
+            raise ToolBusinessError(
+                "skill_query_failed",
+                f"Failed to query skill '{skill_id}': {type(e).__name__}",
+                detail=str(e),
+                retryable=True,
+            ) from e
         if skill is None:
-            return f"[Tool Error] Skill '{skill_id}' not found."
+            raise ToolBusinessError(
+                "skill_not_found",
+                f"Skill '{skill_id}' not found.",
+                status=ToolExecutionStatus.INVALID_INPUT,
+                metadata={"skill_id": skill_id},
+            )
 
         # Manifest 白名单校验：path 必须是 publish 时冻结在 assets_manifest 里的那些
         path_to_object_key = {asset.path: asset.object_key for asset in skill.assets_manifest}
@@ -99,9 +109,15 @@ class LoadSkillAssetTool(BaseTool):
                 skill_id=skill_id,
                 path=path,
             )
-            return (
-                f"[Tool Error] Asset path '{path}' is not declared in the assets manifest of skill '{skill_id}'. "
-                f"Available: {sorted(path_to_object_key.keys()) or 'none'}."
+            raise ToolBusinessError(
+                "asset_path_not_declared",
+                f"Asset path '{path}' is not declared in the assets manifest of skill '{skill_id}'.",
+                status=ToolExecutionStatus.DENIED,
+                metadata={
+                    "skill_id": skill_id,
+                    "path": path,
+                    "available": sorted(path_to_object_key.keys()),
+                },
             )
         object_key = path_to_object_key[path]
         if not object_key:
@@ -112,9 +128,10 @@ class LoadSkillAssetTool(BaseTool):
                 skill_id=skill_id,
                 path=path,
             )
-            return (
-                f"[Tool Error] Asset '{path}' of skill '{skill_id}' has no object_key registered; "
-                f"please contact the skill publisher."
+            raise ToolBusinessError(
+                "asset_object_key_missing",
+                f"Asset '{path}' of skill '{skill_id}' has no object_key registered.",
+                metadata={"skill_id": skill_id, "path": path},
             )
 
         try:
@@ -128,7 +145,13 @@ class LoadSkillAssetTool(BaseTool):
                 path=path,
                 object_key=object_key,
             )
-            return f"[Tool Error] Failed to read asset: {type(e).__name__}: {e}"
+            raise ToolBusinessError(
+                "asset_read_failed",
+                f"Failed to read asset: {type(e).__name__}",
+                detail=str(e),
+                retryable=True,
+                metadata={"skill_id": skill_id, "path": path, "object_key": object_key},
+            ) from e
 
         # Loader 返回 bytes：资产可能是文本（.md / .py / .json）也可能是二进制（.png / .pdf / .wasm ...）
         # 在给 LLM 的边界上做 UTF-8 严格解码，拒绝不可文本化的二进制资产
@@ -144,10 +167,14 @@ class LoadSkillAssetTool(BaseTool):
                 object_key=object_key,
                 bytes=len(raw),
             )
-            return (
-                f"[Tool Error] Asset '{path}' of skill '{skill_id}' appears to be a binary blob "
-                f"({len(raw)} bytes) and cannot be shown as text. "
-                f"If you need to reference it, ask the user to describe or preview the asset instead."
+            raise ToolBusinessError(
+                "asset_not_text",
+                (
+                    f"Asset '{path}' of skill '{skill_id}' appears to be a binary blob "
+                    f"({len(raw)} bytes) and cannot be shown as text."
+                ),
+                status=ToolExecutionStatus.INVALID_INPUT,
+                metadata={"skill_id": skill_id, "path": path, "bytes": len(raw)},
             )
 
         # 字符截断，防止超长资产撑爆上下文水位

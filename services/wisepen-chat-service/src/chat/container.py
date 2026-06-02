@@ -24,12 +24,10 @@ from chat.core.persistence import (
 from chat.application.chat_turn_coordinator import ChatTurnCoordinator
 from chat.application.skill_matcher import KeywordSkillMatcher
 from chat.application.skill_cache_refresher import SkillCacheRefresher
-from chat.application.tools import (
-    ToolRegistry,
-    SearchHistoricalMessagesTool,
-    LoadSkillTool,
-    LoadSkillAssetTool,
-)
+from chat.application.tools.load_skill_asset_tool import LoadSkillAssetTool
+from chat.application.tools.load_skill_tool import LoadSkillTool
+from chat.application.tools.core import ToolRegistry
+from chat.application.tools.search_history_tool import SearchHistoricalMessagesTool
 from common.clients.file_storage import FileStorageClient
 from chat.core.config.nacos import nacos_client_manager
 from common.cloud.service_discovery import ServiceDiscovery
