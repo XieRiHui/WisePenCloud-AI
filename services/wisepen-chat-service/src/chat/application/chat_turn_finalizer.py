@@ -111,7 +111,7 @@ class ChatTurnFinalizer:
         resolved_model: ModelRequestInfo,
         new_messages: List[ChatMessage],
         group_id: Optional[str] = None,
-    ) -> None:
+    ) -> List[ChatMessage]:
         """后台统一处理所有存储逻辑: placeholder 裁剪 → Redis 追加 → MongoDB 落盘 → Memory 摄入 → Token 计费"""
         # 先处理持久化占位符，如果有占位符应使用占位符替换原本的内容
         persistable = self._persisted_output_placeholder_handler(new_messages)
@@ -144,7 +144,34 @@ class ChatTurnFinalizer:
                                         resolved_model=resolved_model,
                                         messages=persistable,
                                         group_id=group_id)
+        return persistable
 
+
+    async def persist_then_summarize_and_compress(
+        self,
+        user_id: str,
+        session_id: str,
+        resolved_model: ModelRequestInfo,
+        new_messages: List[ChatMessage],
+        messages_keep: List[ChatMessage],
+        messages_compress_candidates: List[ChatMessage],
+        existing_summary: Optional[str],
+        group_id: Optional[str] = None,
+    ) -> None:
+        """先持久化并应用工具输出占位符，再使用占位符后的材料做摘要压缩。"""
+        persistable = await self.persist_all(
+            user_id=user_id,
+            session_id=session_id,
+            resolved_model=resolved_model,
+            new_messages=new_messages,
+            group_id=group_id,
+        )
+        await self.summarize_and_compress(
+            session_id=session_id,
+            messages_keep=messages_keep + persistable,
+            messages_compress_candidates=messages_compress_candidates,
+            existing_summary=existing_summary,
+        )
 
 
     async def auto_generate_title(self, session_id: str, user_id: str, user_query: str) -> None:

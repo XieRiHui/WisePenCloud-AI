@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from common.logger import log_fail, log_error
 
 from chat.core.config.app_settings import settings
+from chat.application.tools.skill import SkillPromptBuilder
 from chat.domain.entities import ChatMessage, Role, ChatSession
 from chat.domain.entities.skill import SkillMeta
 from chat.domain.repositories import MessageRepository, HotContextRepository, SessionRepository
@@ -94,7 +95,7 @@ class ChatContextAssembler:
         relevant_facts: List[str],
         session_summary: Optional[str],
         states: Optional[List[Dict[str, Any]]] = None,
-        candidate_skills: Optional[List[SkillMeta]] = None,
+        available_skills: Optional[List[SkillMeta]] = None,
     ) -> List[ChatMessage]:
         """组装最终发往 LLM 的消息列表。"""
         system_prompt = """
@@ -129,29 +130,12 @@ class ChatContextAssembler:
                 content=f"[Conversation Summary so far]:\n{session_summary}",
             ))
 
-        # Skill 候选清单：受控披露，只在 matcher 命中时注入；明确限制"仅在直接相关时加载"
-        # 用 skill_id 作机器标识，description 给 LLM 做相关性判断
-        if candidate_skills:
-            skill_lines = [
-                f"- id=\"{s.skill_id}\": {s.description}" for s in candidate_skills
-            ]
-            skill_block = (
-                "[Available Skills]\n"
-                "The following skills MAY be relevant to the user's current request. "
-                "Each skill contains detailed domain instructions (SKILL.md) and possibly supporting assets.\n"
-                "Strict rules:\n"
-                "1. Load a skill ONLY when it is DIRECTLY required to fulfill the current request. Do not load speculatively.\n"
-                "2. To load, call the tool `load_skill` with `skill_id` exactly as listed below.\n"
-                "3. After loading, follow the SKILL.md instructions precisely. "
-                "Use `load_skill_asset` to open a specific reference/template only if SKILL.md explicitly says to.\n"
-                "4. If none of the skills apply, simply ignore this list and answer normally.\n\n"
-                "Skills:\n"
-                + "\n".join(skill_lines)
-            )
+        # Skill 可用清单：披露轻量 metadata，由 LLM 判断是否需要加载完整 SKILL.md。
+        if available_skills:
             messages.append(ChatMessage(
                 session_id=session_id,
                 role=Role.SYSTEM,
-                content=skill_block,
+                content=SkillPromptBuilder.build_available_skills_prompt(available_skills),
             ))
 
         # 经过滑动窗口裁剪后的近期对话明细
