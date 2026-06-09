@@ -9,7 +9,7 @@ from typing import Dict, Optional
 
 import httpx
 
-from common.clients.file_storage import FileStorageClient
+from chat.service_client.file_storage_service_client import FileStorageClient
 from common.logger import log_error, log_event, log_fail
 
 from chat.domain.interfaces.skill_asset_loader import SkillAssetLoader

@@ -9,6 +9,7 @@ from common.http.rpc_client import RpcClient
 
 
 _DEFAULT_SERVICE_NAME = "wisepen-file-storage-service"
+_GET_DOWNLOAD_URL_PATH = "/internal/storage/getDownloadUrl"
 _DEFAULT_DOWNLOAD_DURATION_SECONDS = 900
 
 
@@ -33,13 +34,12 @@ class FileStorageClient:
     ) -> str:
         data = await self._rpc.get(
             self._service_name,
-            "/internal/storage/getDownloadUrl",
+            _GET_DOWNLOAD_URL_PATH,
             params={"objectKey": object_key, "duration": duration_seconds},
         )
         if not isinstance(data, str) or not data:
             raise RpcError(
-                service_name=self._service_name,
-                path="/internal/storage/getDownloadUrl",
+                service_name=self._service_name, path=_GET_DOWNLOAD_URL_PATH,
                 msg=f"unexpected data payload: {data!r}",
             )
         return data
