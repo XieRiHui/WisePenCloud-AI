@@ -12,16 +12,13 @@ import httpx
 from chat.service_client.file_storage_service_client import FileStorageClient
 from common.logger import log_error, log_event, log_fail
 
-from chat.domain.interfaces.skill_asset_loader import SkillAssetLoader
-
-# OSS 路径布局与发布侧保持一致
-_OBJECT_KEY_PREFIX = "skills"
+from chat.domain.interfaces.file_loader import FileLoader
 
 
-class OssSkillAssetLoader(SkillAssetLoader):
+class OssFileLoader(FileLoader):
     """
-    经 wisepen-file-storage-service 颁发的预签名 URL 从 OSS 拉取 Skill 资产
-    把资产正文落在进程本地磁盘缓存里，一段时间未使用即被 GC 清理
+    经 wisepen-file-storage-service 颁发的预签名 URL 从 OSS 拉取 Object
+    把 Object 落在进程本地磁盘缓存里，一段时间未使用即被 GC 清理
     """
 
     def __init__(
@@ -49,7 +46,7 @@ class OssSkillAssetLoader(SkillAssetLoader):
         if self._gc_task is None or self._gc_task.done():
             self._gc_task = asyncio.create_task(self._gc_loop(), name="skill-asset-cache-gc")
             log_event(
-                "Skill 资产磁盘缓存 GC 启动",
+                "OSS Object 磁盘缓存 GC 启动",
                 cache_dir=str(self._cache_dir),
                 ttl_seconds=int(self._cache_ttl),
                 interval_seconds=int(self._gc_interval),
@@ -72,7 +69,7 @@ class OssSkillAssetLoader(SkillAssetLoader):
 
         # 计算缓存文件路径 (SHA1，避免 object_key 里有 / 导致目录嵌套)
         digest = hashlib.sha1(object_key.encode("utf-8")).hexdigest()
-        cache_path = self._cache_dir / f"{digest}.asset"
+        cache_path = self._cache_dir / f"{digest}.object"
 
         # 尝试读取缓存文件
         hit = self._read_if_fresh(cache_path)
@@ -105,7 +102,7 @@ class OssSkillAssetLoader(SkillAssetLoader):
             # 按字节读，资产可能是 .py/.md 文本，也可能是 .png/.pdf/.wasm 等二进制
             return cache_path.read_bytes()
         except OSError as e:
-            log_fail("Skill 资产缓存读取", e, cache_path=str(cache_path))
+            log_fail("OSS Object 磁盘缓存读取", e, cache_path=str(cache_path))
             return None
 
     def _atomic_write(self, cache_path: Path, content: bytes) -> None:
@@ -130,10 +127,10 @@ class OssSkillAssetLoader(SkillAssetLoader):
             resp = await self._http.get(url)
             resp.raise_for_status()
         except httpx.HTTPError as e:
-            log_error("Skill 资产 OSS 下载", e, object_key=object_key)
+            log_error("OSS Object 下载", e, object_key=object_key)
             raise
         content = resp.content
-        log_event("Skill 资产写入磁盘缓存", object_key=object_key, bytes=len(content))
+        log_event("OSS Object 写入磁盘缓存", object_key=object_key, bytes=len(content))
         return content
 
     async def _gc_loop(self) -> None:
@@ -152,8 +149,8 @@ class OssSkillAssetLoader(SkillAssetLoader):
                             p.unlink(missing_ok=True)
                             removed += 1
                     except OSError as e:
-                        log_fail("Skill 资产缓存 GC 单文件", e, path=str(p))
+                        log_fail("OSS Object 磁盘缓存GC", e, path=str(p))
                 if removed:
-                    log_event("Skill 资产缓存 GC", removed=removed, ttl_seconds=int(self._cache_ttl))
+                    log_event("OSS Object 磁盘缓存GC", removed=removed, ttl_seconds=int(self._cache_ttl))
         except asyncio.CancelledError:
             raise

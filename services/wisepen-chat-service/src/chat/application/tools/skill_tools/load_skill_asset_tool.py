@@ -2,6 +2,7 @@ from typing import Any, Dict
 
 from chat.application.tools.core.execution.hooks.base import ToolPreflightHook, ToolPreflightResult
 from chat.application.tools.core.llm.invocation import ToolInvocation
+from chat.service_client import AIAssetClient
 from chat.service_client.resource_service_client import ResourceClient
 
 from chat.core.config.app_settings import settings
@@ -15,13 +16,12 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.skill_tools.common import AllowedSkillIdCheck, build_skill_asset_output_placeholder, \
     SkillPermissionCheck
-from chat.domain.interfaces.skill_asset_loader import SkillAssetLoader
-from chat.domain.repositories import SkillRepository
+from chat.domain.interfaces.file_loader import FileLoader
 
 
 class ValidSkillAssetPathCheck(ToolPreflightHook):
-    def __init__(self, skill_repo: SkillRepository) -> None:
-        self._skill_repo = skill_repo
+    def __init__(self, ai_asset_client: AIAssetClient) -> None:
+        self._ai_asset_client = ai_asset_client
 
     async def check(
             self,
@@ -33,7 +33,7 @@ class ValidSkillAssetPathCheck(ToolPreflightHook):
         skill_id: str = invocation.tool_call_arguments.get("skill_id")
         path: str = invocation.tool_call_arguments.get("path")
 
-        skill = await self._skill_repo.get_published_skill(skill_id)
+        skill = await self._ai_asset_client.get_published_skill(skill_id)
         if skill is None:
             return ToolPreflightResult(ok=False,
                                        message=f"Skill '{skill_id}' not found.")
@@ -61,11 +61,11 @@ class LoadSkillAssetTool:
 
     def __init__(
         self,
-        skill_repo: SkillRepository,
-        skill_asset_loader: SkillAssetLoader,
+        file_loader: FileLoader,
+        ai_asset_client: AIAssetClient,
         resource_client: ResourceClient,
     ) -> None:
-        self._skill_asset_loader = skill_asset_loader
+        self._file_loader = file_loader
         parameters_schema: Dict[str, Any] = {
             "type": "object",
             "properties": {
@@ -100,7 +100,7 @@ class LoadSkillAssetTool:
                 timeout_seconds=8.0,
                 max_output_chars=settings.TOOL_RESULT_MAX_CHARS,
             ),
-            preflight_hooks=(AllowedSkillIdCheck(), SkillPermissionCheck(resource_client), ValidSkillAssetPathCheck(skill_repo)),
+            preflight_hooks=(AllowedSkillIdCheck(), SkillPermissionCheck(resource_client), ValidSkillAssetPathCheck(ai_asset_client)),
         )
 
     @property
@@ -113,7 +113,7 @@ class LoadSkillAssetTool:
 
         object_key = context["skill_asset_object_key"]
         try:
-            raw = await self._skill_asset_loader.load_by_object_key(object_key)
+            raw = await self._file_loader.load_by_object_key(object_key)
         except Exception as e:
             raise ToolExecutionError(
                 reason="Skill Asset Load Failed",
