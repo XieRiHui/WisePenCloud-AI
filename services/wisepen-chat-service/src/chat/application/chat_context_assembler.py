@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from common.logger import log_fail, log_error
 
 from chat.core.config.app_settings import settings
-from chat.application.tools.skill import SkillPromptBuilder
 from chat.domain.entities import ChatMessage, Role, ChatSession
 from chat.domain.entities.skill import SkillMeta
 from chat.domain.repositories import MessageRepository, HotContextRepository, SessionRepository
@@ -132,10 +131,28 @@ class ChatContextAssembler:
 
         # Skill 可用清单：披露轻量 metadata，由 LLM 判断是否需要加载完整 SKILL.md。
         if available_skills:
+            skill_lines = [
+                f'- id="{skill.skill_id}" name="{skill.display_name}": {skill.description}'
+                for skill in available_skills
+            ]
+            skill_block = (
+                "[Available WisePen Skills]\n"
+                "The following skills are available in this turn as lightweight metadata. "
+                "Each skill contains detailed domain instructions in SKILL.md and may include supporting assets.\n"
+                "Strict rules:\n"
+                "1. If the user explicitly asks to use one of the listed skills by id or name, call `load_skill` for that skill.\n"
+                "2. Otherwise, call `load_skill` only when a listed skill is directly useful for the current request. Do not load speculatively.\n"
+                "3. To load a skill, call `load_skill` with `skill_id` exactly as listed below.\n"
+                "4. After loading, the returned SKILL.md is mandatory for the current task. Follow its Scope, Output Format, and Constraints precisely.\n"
+                "5. Call `load_skill_asset` only after loading a skill, and only if the loaded SKILL.md explicitly requires a listed asset.\n"
+                "6. If none of the skills apply, ignore this list and answer normally.\n\n"
+                "Skills:\n"
+                + "\n".join(skill_lines)
+            )
             messages.append(ChatMessage(
                 session_id=session_id,
                 role=Role.SYSTEM,
-                content=SkillPromptBuilder.build_available_skills_prompt(available_skills),
+                content=skill_block,
             ))
 
         # 经过滑动窗口裁剪后的近期对话明细

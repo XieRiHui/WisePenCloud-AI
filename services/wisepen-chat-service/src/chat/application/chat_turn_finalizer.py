@@ -147,33 +147,6 @@ class ChatTurnFinalizer:
         return persistable
 
 
-    async def persist_then_summarize_and_compress(
-        self,
-        user_id: str,
-        session_id: str,
-        resolved_model: ModelRequestInfo,
-        new_messages: List[ChatMessage],
-        messages_keep: List[ChatMessage],
-        messages_compress_candidates: List[ChatMessage],
-        existing_summary: Optional[str],
-        group_id: Optional[str] = None,
-    ) -> None:
-        """先持久化并应用工具输出占位符，再使用占位符后的材料做摘要压缩。"""
-        persistable = await self.persist_all(
-            user_id=user_id,
-            session_id=session_id,
-            resolved_model=resolved_model,
-            new_messages=new_messages,
-            group_id=group_id,
-        )
-        await self.summarize_and_compress(
-            session_id=session_id,
-            messages_keep=messages_keep + persistable,
-            messages_compress_candidates=messages_compress_candidates,
-            existing_summary=existing_summary,
-        )
-
-
     async def auto_generate_title(self, session_id: str, user_id: str, user_query: str) -> None:
         """首轮对话后自动为 'New Chat' 会话生成简洁标题"""
         try:

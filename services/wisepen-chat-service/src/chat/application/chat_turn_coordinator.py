@@ -8,6 +8,7 @@ from chat.domain.entities import ChatMessage, Role
 from chat.domain.interfaces.llm import LLMProvider
 from chat.domain.interfaces.memory import MemoryProvider
 from chat.domain.repositories import SessionRepository, MessageRepository, HotContextRepository, ModelRepository, ProviderRepository
+from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 from chat.application.chat_context_assembler import ChatContextAssembler
 from chat.application.query_loop_runtime import QueryLoopRuntime
@@ -23,8 +24,8 @@ from chat.application.tools.core import ToolRegistry
 from common.kafka.producer import KafkaProducerClient
 
 
-# load_skill 默认可见；load_skill_asset 仅在本轮存在可展示 Skill 时暴露。
-_SKILL_ASSET_TOOL_NAMES = frozenset({"load_skill_asset"})
+# Skill 工具默认不暴露；仅在本轮存在可展示 Skill 时整体解禁。
+_SKILL_TOOL_NAMES = frozenset({"load_skill", "load_skill_asset"})
 
 
 class ChatTurnCoordinator:
@@ -115,11 +116,11 @@ class ChatTurnCoordinator:
         expose_tool_name_set = None
         if available_skills:
             # allowed_skill_ids 表示本轮展示给 LLM 的 Skill 白名单，工具执行前仍会校验。
-            expose_tool_name_set = set(_SKILL_ASSET_TOOL_NAMES)
+            expose_tool_name_set = set(_SKILL_TOOL_NAMES)
             tool_context["allowed_skill_ids"] = [s.skill_id for s in available_skills]
 
         # [Tool Scope] 派生本请求的工具视图快照
-        # expose_tool_name_set 仅在有可展示 Skill 时解禁 load_skill_asset；load_skill 默认可见。
+        # expose_tool_name_set 仅在有可展示 Skill 时解禁 Skill 工具。
         # runtime_discovered_tools 预留给"运行时动态发现的工具"（如 Skill bundle 自带 tools），暂时留空
         # allow_tool_name_set/deny_tool_name_set 预留给未来"用户级工具偏好"接入，暂时留空
         tool_scope = self._tool_registry.derive(
@@ -188,24 +189,45 @@ class ChatTurnCoordinator:
 
             messages_to_persist = [user_msg] + intermediate_messages + [assistant_msg]
 
-            if needs_compression:
-                background_tasks.add_task(
-                    self._turn_finalizer.persist_then_summarize_and_compress,
-                    user_id,
-                    session_id,
-                    resolved,
-                    messages_to_persist,
-                    messages_keep,
-                    messages_compress_candidates,
-                    session_summary,
-                )
-            else:
-                background_tasks.add_task(
-                    self._turn_finalizer.persist_all,
-                    user_id, session_id, resolved,
-                    messages_to_persist
-                )
+            background_tasks.add_task(
+                self._persist_and_maybe_compress_turn,
+                user_id,
+                session_id,
+                resolved,
+                messages_to_persist,
+                messages_keep,
+                messages_compress_candidates,
+                session_summary,
+                needs_compression,
+            )
             background_tasks.add_task(
                 self._turn_finalizer.auto_generate_title,
                 session_id, user_id, user_query
             )
+
+    async def _persist_and_maybe_compress_turn(
+        self,
+        user_id: str,
+        session_id: str,
+        resolved_model: ModelRequestInfo,
+        messages_to_persist: List[ChatMessage],
+        messages_keep: List[ChatMessage],
+        messages_compress_candidates: List[ChatMessage],
+        session_summary: Optional[str],
+        needs_compression: bool,
+    ) -> None:
+        persistable = await self._turn_finalizer.persist_all(
+            user_id,
+            session_id,
+            resolved_model,
+            messages_to_persist,
+        )
+        if not needs_compression:
+            return
+
+        await self._turn_finalizer.summarize_and_compress(
+            session_id=session_id,
+            messages_keep=messages_keep + persistable,
+            messages_compress_candidates=messages_compress_candidates,
+            existing_summary=session_summary,
+        )

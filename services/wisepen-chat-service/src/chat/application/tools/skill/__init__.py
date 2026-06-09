@@ -1,7 +1,11 @@
 from chat.application.tools.skill.checks import AllowedSkillIdCheck
-from chat.application.tools.skill.prompt_builder import SkillPromptBuilder
+from chat.application.tools.skill.placeholders import (
+    build_skill_asset_output_placeholder,
+    build_skill_output_placeholder,
+)
 
 __all__ = [
     "AllowedSkillIdCheck",
-    "SkillPromptBuilder",
+    "build_skill_asset_output_placeholder",
+    "build_skill_output_placeholder",
 ]
