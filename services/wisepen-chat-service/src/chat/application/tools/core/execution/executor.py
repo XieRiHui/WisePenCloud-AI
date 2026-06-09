@@ -30,6 +30,8 @@ class ToolExecutor:
                 RequiredContextCheck(),
                 *tool.definition.preflight_hooks,
             ]
+
+            preflight_metadata = {}
             for preflight_hook in preflight_hooks:
                 output = await preflight_hook.check(
                     invocation,
@@ -43,9 +45,14 @@ class ToolExecutor:
                         detail_reason=output.message,
                         retryable=False,
                     )
+                else:
+                    preflight_metadata.update(output.metadata)
 
             output = await self._run(
-                tool.execute(self._tool_scope.context, **invocation.tool_call_arguments),
+                tool.execute({
+                    **self._tool_scope.context,
+                    **preflight_metadata,
+                }, **invocation.tool_call_arguments),
                 timeout_seconds=tool.definition.policy.timeout_seconds,
                 tool_name=invocation.tool_name,
             )

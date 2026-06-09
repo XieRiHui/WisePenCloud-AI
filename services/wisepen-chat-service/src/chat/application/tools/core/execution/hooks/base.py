@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from chat.application.tools.core.definition import ToolPolicy, ToolParametersSchema
@@ -9,6 +9,7 @@ from chat.application.tools.core.llm.invocation import ToolInvocation
 class ToolPreflightResult:
     ok: bool
     message: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 class ToolPreflightHook(Protocol):
     name: str
