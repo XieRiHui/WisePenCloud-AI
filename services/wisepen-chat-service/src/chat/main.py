@@ -23,7 +23,7 @@ from chat.api.endpoints import chat as chat_endpoints
 from chat.api.endpoints import session as session_endpoints
 from chat.api.endpoints import memory as memory_endpoints
 from chat.api.endpoints import model as model_endpoints
-from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping, Skill
+from chat.domain.entities import ChatSession, ChatMessage, Provider, Model, ModelProviderMapping
 
 
 # 避免 HTTP 代理拦截内部中间件请求。
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     mongo_client = AsyncMongoClient(settings.MONGODB_URL)
     await init_beanie(
         database=mongo_client[settings.MONGODB_DB_NAME],
-        document_models=[ChatSession, ChatMessage, Provider, Model, ModelProviderMapping, Skill],
+        document_models=[ChatSession, ChatMessage, Provider, Model, ModelProviderMapping],
     )
     log_event("Beanie 初始化", db=settings.MONGODB_DB_NAME)
 
@@ -58,21 +58,13 @@ async def lifespan(app: FastAPI):
     kafka_producer = container.kafka_producer()
     await kafka_producer.start()
 
-    # 启动 Skill cache refresher
-    skill_cache_refresher = container.skill_cache_refresher()
-    await skill_cache_refresher.start()
-
-    # 启动 Skill 发布事件 Consumer
-    skill_published_consumer = container.skill_published_consumer()
-    await skill_published_consumer.start()
-
-    # 启动 Skill 资产加载器
-    skill_asset_loader = container.skill_asset_loader()
-    if getattr(skill_asset_loader, "start", None) is not None:
+    # 启动 Oss File 加载器
+    oss_file_loader = container.oss_file_loader()
+    if getattr(oss_file_loader, "start", None) is not None:
         try:
-            await skill_asset_loader.start()
+            await oss_file_loader.start()
         except Exception as e:
-            log_error("SkillAssetLoader 启动", e)
+            log_error("FileLoader 启动", e)
 
     log_event(f"{bootstrap_settings.APP_NAME} 就绪", port=bootstrap_settings.SERVICE_PORT)
 
@@ -82,25 +74,17 @@ async def lifespan(app: FastAPI):
     # --- 关闭阶段 ---
     log_event(f"{bootstrap_settings.APP_NAME} 关闭")
 
-    # 关闭 Skill 发布事件 Consumer
-    skill_published_consumer = container.skill_published_consumer()
-    await skill_published_consumer.stop()
-
-    # 关闭 Skill cache refresher
-    skill_cache_refresher = container.skill_cache_refresher()
-    await skill_cache_refresher.stop()
-
     # 关闭 Kafka Producer
     kafka_producer = container.kafka_producer()
     await kafka_producer.stop()
 
-    # 关闭 Skill 资产加载器
-    skill_asset_loader = container.skill_asset_loader()
-    if getattr(skill_asset_loader, "stop", None) is not None:
+    # 关闭 Oss File 加载器
+    oss_file_loader = container.oss_file_loader()
+    if getattr(oss_file_loader, "stop", None) is not None:
         try:
-            await skill_asset_loader.stop()
+            await oss_file_loader.stop()
         except Exception as e:
-            log_error("SkillAssetLoader 关闭", e)
+            log_error("FileLoader 关闭", e)
     try:
         await container.rpc_client().aclose()
     except Exception as e:

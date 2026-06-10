@@ -86,7 +86,8 @@ async def chat_completions(
         background_tasks=background_tasks,
         model_id=resolved_model_id,
         provider_id=resolved_provider_id,
-        states=req.states
+        states=req.states,
+        self_selectable_skill_ids=req.self_selectable_skill_ids,
     )
 
     return StreamingResponse(

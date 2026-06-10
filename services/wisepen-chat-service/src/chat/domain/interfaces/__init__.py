@@ -1,9 +1,9 @@
 from .llm import LLMProvider
 from .memory import MemoryProvider
-from .skill_asset_loader import SkillAssetLoader
+from .file_loader import FileLoader
 
 __all__ = [
     "LLMProvider",
     "MemoryProvider",
-    "SkillAssetLoader",
+    "FileLoader",
 ]

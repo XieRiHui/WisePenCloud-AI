@@ -1,7 +1,8 @@
 from typing import Any, Dict
 
 from chat.domain.entities import Skill
-from chat.domain.interfaces import SkillAssetLoader
+from chat.domain.interfaces import FileLoader
+from chat.service_client import AIAssetClient
 from chat.service_client.resource_service_client import ResourceClient
 
 from chat.core.config.app_settings import settings
@@ -14,7 +15,6 @@ from chat.application.tools.core import (
     ToolRiskLevel,
 )
 from chat.application.tools.skill_tools.common import AllowedSkillIdCheck, build_skill_output_placeholder, SkillPermissionCheck
-from chat.domain.repositories import SkillRepository
 
 
 class LoadSkillTool:
@@ -25,10 +25,12 @@ class LoadSkillTool:
 
     def __init__(
         self,
-        skill_repo: SkillRepository,
+        file_loader: FileLoader,
+        ai_asset_client: AIAssetClient,
         resource_client: ResourceClient,
     ) -> None:
-        self._skill_repo = skill_repo
+        self._file_loader = file_loader
+        self._ai_asset_client = ai_asset_client
         parameters_schema: Dict[str, Any] = {
             "type": "object",
             "properties": {
@@ -69,7 +71,7 @@ class LoadSkillTool:
     async def execute(self, context: dict[str, Any], **kwargs: Any) -> str:
         skill_id = (kwargs.get("skill_id") or "").strip()
 
-        skill = await self._skill_repo.get_published_skill(skill_id)
+        skill = await self._ai_asset_client.get_published_skill(skill_id)
         if skill is None:
             raise ToolExecutionError(
                 reason="Skill Not Found",
@@ -93,15 +95,12 @@ class LoadSkillTool:
             lines.append("[Assets Manifest] (use load_skill_asset to open any of these)")
             for asset in skill.assets_manifest:
                 lines.append(
-                    f"- path={asset.path} kind={asset.kind} size={asset.size_bytes} — {asset.description}"
+                    f"- path={asset.path} kind={asset.kind} size={asset.size_bytes}  — {asset.description}"
                 )
 
         return "\n".join(lines)
 
     async def _load_skill_md(self, skill:Skill) -> str:
-        if skill.skill_md:
-            return skill.skill_md
-        # skill_md在首次加载时缓存
         if not skill.skill_md_object_key:
             raise ToolExecutionError(
                 reason="Skill.md Not Available",
@@ -110,7 +109,7 @@ class LoadSkillTool:
             )
 
         try:
-            raw = await self._skill_asset_loader.load_by_object_key(skill.skill_md_object_key)
+            raw = await self._file_loader.load_by_object_key(skill.skill_md_object_key)
         except Exception as e:
             raise ToolExecutionError(
                 reason="Skill.md Load Failed",
@@ -132,5 +131,4 @@ class LoadSkillTool:
                 metadata={"skill_id": skill.skill_id, "bytes": len(raw)},
             ) from e
 
-        await self._skill_repo.cache_skill_md(skill.skill_id, skill_md)
         return skill_md

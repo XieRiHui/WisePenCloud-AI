@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Set
 
-from common.logger import log_error, log_fail, log_event
+from common.logger import log_error
 
 from chat.core.config.app_settings import settings
+from chat.service_client import AIAssetClient
 from chat.domain.entities.skill import SkillMeta
-from chat.domain.repositories import SkillRepository
 
 
 class SkillMatcher(ABC):
@@ -14,10 +14,7 @@ class SkillMatcher(ABC):
     """
 
     @abstractmethod
-    async def warmup(self) -> None: ...
-
-    @abstractmethod
-    def match(self, query: str) -> List[SkillMeta]: ...
+    async def match(self, self_selectable_skill_ids: Set[str], user_query: str) -> List[SkillMeta]: ...
 
 
 class DefaultSkillMatcher(SkillMatcher):
@@ -25,32 +22,15 @@ class DefaultSkillMatcher(SkillMatcher):
     默认 Skill 筛选器
     """
 
-    def __init__(self, skill_repo: SkillRepository) -> None:
-        self._skill_repo = skill_repo
-        self._cache: List[SkillMeta] = []
-        self._warmed: bool = False
+    def __init__(self, ai_asset_client: AIAssetClient) -> None:
+        self._ai_asset_client = ai_asset_client
 
-    async def warmup(self) -> None:
+    async def match(self, self_selectable_skill_ids: Set[str], user_query: str) -> List[SkillMeta]:
+        skill_meta_list:List[SkillMeta] = []
         try:
-            metas = await self._skill_repo.list_skill_metas()
+            skill_meta_list = await self._ai_asset_client.list_published_skills_meta(self_selectable_skill_ids)
         except Exception as e:
-            # 捕获所有异常，保证服务可启动 / 周期刷新不炸
-            # 失败时不擦除 self._cache，已有 last-good 继续服务，防止被 Mongo 抖动打回"无 Skill 能力"
-            log_error("Skill matcher warmup", e, had_cache=bool(self._cache))
-            self._warmed = True
-            return
-
-        self._cache = sorted(metas, key=lambda meta: meta.skill_id)
-        self._warmed = True
-        log_event("Skill metadata warmup 完成", count=len(metas))
-
-    def match(self, query: str) -> List[SkillMeta]:
-        if not self._cache:
-            log_fail(
-                "Skill metadata",
-                "cache 为空，本次返回空列表",
-            )
-            return []
+            log_error("Skill metadata resolve", e, count=len(self_selectable_skill_ids))
 
         top_k = max(1, settings.SKILL_MATCH_TOP_K)
-        return self._cache[:top_k]
+        return skill_meta_list[:top_k]

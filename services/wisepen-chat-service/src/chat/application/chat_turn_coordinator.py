@@ -74,6 +74,7 @@ class ChatTurnCoordinator:
             model_id: PydanticObjectId,
             provider_id: Optional[PydanticObjectId] = None,
             states: Optional[List[Dict[str, Any]]] = None,
+            self_selectable_skill_ids: Optional[List[str]] = None,
     ):
         # [Model Resolve] 通过仓储解析模型、映射、供应商和 API 凭证
         resolved = await self._model_repo.resolve_model_for_chat(
@@ -112,7 +113,7 @@ class ChatTurnCoordinator:
         }
 
         # [Skill Discovery] 返回本轮可展示给 LLM 的 Skill metadata，由 LLM 判断是否加载。
-        available_skills = self._skill_matcher.match(user_query)
+        available_skills = await self._skill_matcher.match(self_selectable_skill_ids, user_query)
         expose_tool_name_set = None
         if available_skills:
             # allowed_skill_ids 表示本轮展示给 LLM 的 Skill 白名单，工具执行前仍会校验。

@@ -41,8 +41,6 @@ class AppSettings(BaseModel):
     # Kafka 配置
     KAFKA_BOOTSTRAP_SERVERS: str
     KAFKA_TOKEN_CONSUMPTION_TOPIC: str = "wisepen-user-token-consumption-topic"
-    KAFKA_SKILL_PUBLISHED_TOPIC: str = "wisepen-ai-asset-skill-published-topic"
-    KAFKA_SKILL_PUBLISHED_GROUP_ID: str = "wisepen-chat-skill-published-group"
 
     # Redis / MongoDB / Qdrant 配置
     REDIS_URL: str
@@ -76,28 +74,6 @@ class AppSettings(BaseModel):
     TOOL_RESULT_MAX_CHARS: int = 4000
 
     # Skill 系统配置
-    # 开发期 fixture 根目录：bootstrap_settings.is_dev=True 时 LocalFS 加载器先在这里
-    # 找资产，找不到才回退 OSS。生产形态完全不读这个目录，直接走 OssSkillAssetLoader。
-    SKILL_ASSETS_CACHE_DIR: str = "dev_fixtures/skill_bundles"
-    @property
-    def SKILL_ASSETS_CACHE_PATH(self) -> Path:
-        path = Path(self.SKILL_ASSETS_CACHE_DIR)
-        if path.is_absolute():
-            return path
-        return (SERVICE_ROOT / path).resolve()
-    # OSS 资产本地磁盘缓存目录（运行期管理，GC 自动清理）
-    SKILL_OSS_CACHE_DIR: str = "/var/skill_oss_cache"
-    # 缓存文件 TTL：mtime 距今超过该秒数 → GC 清理（默认 6 小时）
-    SKILL_OSS_CACHE_TTL_SECONDS: int = 6 * 3600
-    # GC 扫描周期（秒）
-    SKILL_OSS_CACHE_GC_INTERVAL_SECONDS: int = 30 * 60
-    # Matcher 每轮给 LLM 暴露的 skill 候选上限（受控披露，防 LLM 误加载）
-    SKILL_MATCH_TOP_K: int = 20
-    # Skill 元数据缓存 TTL（秒）。用户/Java 端发布的新 Skill 最坏需等 TTL 才被当前副本感知。
-    # 过小会增加 Mongo 读压力；过大会让新 Skill 生效滞后。
-    # 未来接 Kafka 事件驱动刷新后可放大此值作为兜底轮询。
-    SKILL_CACHE_TTL_SECONDS: int = 30
-
     # 内部 RPC / 服务发现 配置
     # Nacos 服务发现客户端侧负载均衡策略：weighted_random | round_robin | random
     RPC_LB_STRATEGY: Literal["weighted_random", "round_robin", "random"] = "weighted_random"
@@ -107,6 +83,13 @@ class AppSettings(BaseModel):
     RPC_DEFAULT_RETRIES: int = 2
     # ServiceDiscovery 本地缓存兜底 TTL（秒），即便订阅通道断连也会周期性强制 list
     SERVICE_DISCOVERY_CACHE_TTL_SECONDS: float = 30.0
+
+    # OSS 资产本地磁盘缓存目录（运行期管理，GC 自动清理）
+    OSS_CACHE_DIR: str = "/var/oss_cache"
+    # 缓存文件 TTL：mtime 距今超过该秒数 → GC 清理（默认 6 小时）
+    OSS_CACHE_TTL_SECONDS: int = 6 * 3600
+    # GC 扫描周期（秒）
+    OSS_CACHE_GC_INTERVAL_SECONDS: int = 30 * 60
 
 
 def _run_async(coro):
