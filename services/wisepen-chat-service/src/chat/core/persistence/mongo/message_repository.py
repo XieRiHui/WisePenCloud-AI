@@ -85,6 +85,9 @@ class MongoMessageRepository(MessageRepository):
 
         return page_msgs, total_turns
 
+    async def has_session_messages(self, session_id: str) -> bool:
+        return await ChatMessage.find_one(ChatMessage.session_id == session_id) is not None
+
     async def search_messages_by_text(
         self,
         keyword: str,

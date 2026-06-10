@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 class SkillAssetMeta(BaseModel):
     id: str = Field(...)
-    name: str = Field(...)
     path: str = Field(...)
     object_key: str = Field(...)
     kind: str = Field(...)
@@ -17,8 +16,7 @@ class SkillAssetMeta(BaseModel):
     def from_response(cls, payload: Mapping[str, Any]) -> "SkillAssetMeta":
         return cls(
             id=str(payload.get("id")),
-            name=str(payload.get("name")),
-            path=str(payload.get('path')),
+            path=str(f"{payload.get('path')}/{payload.get("name")}"),
             object_key=str(payload.get("objectKey")),
             kind=str(payload.get("skillAssetResourceType")),
             upload_status=str(payload.get("uploadStatus")),

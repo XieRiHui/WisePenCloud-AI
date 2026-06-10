@@ -1,6 +1,5 @@
 import json
 import uuid
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Iterator, AsyncIterator, Union
 
 from beanie import PydanticObjectId
@@ -29,21 +28,6 @@ from chat.application.events import (
     ToolInputStartEvent,
     ToolOutputAvailableEvent,
 )
-
-
-# =============================================================================
-# 内部数据结构
-# =============================================================================
-
-@dataclass(frozen=True)
-class _StepTerminal:
-    """_run_single_step 的终端控制信号，固定为 async generator 的最后一项，由 QueryLoopRuntime 外层识别并分流
-    - should_continue: 本轮 finish_reason == 'tool_calls' 且有 tool accumulator 时为 True
-    - new_messages:    本轮要追加到会话的 assistant (+tool) 消息；可能为空列表
-    """
-    should_continue: bool
-    new_messages: List[ChatMessage]
-
 
 class _StepDeltaInterpreter:
     """
@@ -154,7 +138,7 @@ class QueryLoopRuntime:
     ) -> AsyncIterator[StreamEvent]:
         # 进入多轮循环
         for iteration in range(settings.AGENT_MAX_ITERATIONS):
-            terminal: Optional[_StepTerminal] = None
+            step_finish_event: Optional[StepFinishEvent] = None
             # 把当前 messages、模型参数 和 tool_scope 委派给 _run_single_step()
             # 然后异步消费它的产出
             async for item in self._run_single_step(
@@ -167,17 +151,17 @@ class QueryLoopRuntime:
                 iteration=iteration,
                 tool_scope=tool_scope,
             ):
-                # 如果拿到的是 _StepTerminal 就存到 terminal；否则直接 yield
-                if isinstance(item, _StepTerminal):
-                    terminal = item
-                else:
-                    yield item
+                # 如果拿到的是 StepFinishEvent 就存到 step_finish_event；否则直接 yield
+                if isinstance(item, StepFinishEvent):
+                    step_finish_event = item
+                yield item
 
-            assert terminal is not None
-            # 统一追加消息并决定是否继续下一轮
-            messages.extend(terminal.new_messages)
-            if not terminal.should_continue:
+            assert step_finish_event is not None
+            if step_finish_event.is_finished:
                 return
+            else:
+                # 统一追加消息并决定是否继续下一轮
+                messages.extend(step_finish_event.intermediate_messages)
         else:
             # 超出最大迭代次数时兜底
             async for ev in self._emit_exhausted_warning(session_id):
@@ -196,7 +180,7 @@ class QueryLoopRuntime:
         api_key: Optional[str],
         iteration: int,
         tool_scope: ToolScope,
-    ) -> AsyncIterator[Union[StreamEvent, _StepTerminal]]:
+    ) -> AsyncIterator[Union[StreamEvent, StepFinishEvent]]:
         # 发 step 开始事件
         yield StepStartEvent()
 
@@ -207,9 +191,10 @@ class QueryLoopRuntime:
 
         finish_reason: str = "stop"
 
-        # schema 已由 ToolScope 在构造期固化，这里零决策直读
+        # schema 已由 ToolScope 在构造期固化，这里直读
         tool_schemas = tool_scope.schemas()
 
+        usage_tokens = 0
         try:
             # 调用模型流式接口
             async for chunk in self.llm.stream_chat_completion(
@@ -219,12 +204,14 @@ class QueryLoopRuntime:
                 api_base=api_base,
                 api_key=api_key,
             ):
-                choice = chunk.choices[0]
-                finish_reason = choice.finish_reason or finish_reason
+                usage_tokens += chunk.usage_tokens
+                choices = chunk.raw.choices
+                if choices: # usage chunk 的 choices 可能是空数组
+                    finish_reason = choices[0].finish_reason or finish_reason
 
-                # 把 delta 片段交给解释器，产出 StreamEvent
-                for ev in delta_interpreter.consume(choice.delta):
-                    yield ev
+                    # 把 delta 片段交给解释器，产出 StreamEvent
+                    for ev in delta_interpreter.consume(choices[0].delta):
+                        yield ev
         except ServiceException:
             raise  # 已经是业务异常，直接向上传播
         except Exception as e:
@@ -237,10 +224,20 @@ class QueryLoopRuntime:
         for ev in delta_interpreter.close():
             yield ev
 
+        if usage_tokens == 0:
+            # 未能正确计费，需要兜底
+            usage_tokens = await self.llm.count_message_tokens(messages=messages, model_name=model_name)
+
         # 如果没有工具调用，则结束这一轮（也结束整个循环）
         if finish_reason != "tool_calls" or not delta_interpreter.accumulators:
-            yield StepFinishEvent()
-            yield _StepTerminal(should_continue=False, new_messages=[])
+            final_message = ChatMessage(
+                session_id=session_id,
+                role=Role.ASSISTANT,
+                model_id=model_id,
+                content=delta_interpreter.assistant_content or "",
+                reasoning_content=delta_interpreter.assistant_reasoning or None,
+            )
+            yield StepFinishEvent(is_finished=True, final_assistant_message=final_message, usage_tokens=usage_tokens)
             return
         
         # 如果有工具调用，则进入工具阶段
@@ -308,8 +305,7 @@ class QueryLoopRuntime:
             )
 
         # 结束本轮并继续下一轮模型推理（因为调用工具）
-        yield StepFinishEvent()
-        yield _StepTerminal(should_continue=True, new_messages=new_messages)
+        yield StepFinishEvent(is_finished=False, intermediate_messages=new_messages, usage_tokens=usage_tokens)
 
     async def _emit_exhausted_warning(
         self, session_id: str
@@ -322,4 +318,9 @@ class QueryLoopRuntime:
         yield TextStartEvent(text_id=text_id)
         yield TextDeltaEvent(text_id=text_id, delta=warn)
         yield TextEndEvent(text_id=text_id)
-        yield StepFinishEvent()
+        final_message = ChatMessage(
+            session_id=session_id,
+            role=Role.ASSISTANT,
+            content=warn,
+        )
+        yield StepFinishEvent(is_finished=True, final_assistant_message=final_message, usage_tokens=0)

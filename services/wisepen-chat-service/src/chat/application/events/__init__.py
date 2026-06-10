@@ -1,4 +1,4 @@
-from chat.application.events.base import StreamEvent
+from chat.application.events.base import StreamEvent, ErrorEvent
 from chat.application.events.reasoning import (
     ReasoningDeltaEvent,
     ReasoningEndEvent,
@@ -14,6 +14,7 @@ from chat.application.events.tool import (
 
 __all__ = [
     "StreamEvent",
+    "ErrorEvent",
     "StepStartEvent",
     "StepFinishEvent",
     "TextStartEvent",

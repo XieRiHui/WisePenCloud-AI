@@ -6,6 +6,10 @@ from chat.domain.entities import ChatSession
 
 class CreateSessionRequest(BaseModel):
     title: Optional[str] = Field(default="New Chat", description="会话标题")
+    agent_id: Optional[str] = Field(default=None, description="绑定的 Agent 资源 ID")
+
+class SetSessionAgentRequest(BaseModel):
+    agent_id: Optional[str] = Field(default=None, description="绑定的 Agent 资源 ID")
 
 class RenameSessionRequest(BaseModel):
     new_title: Optional[str] = Field(default=None, description="新会话标题")
@@ -20,6 +24,8 @@ class SessionResponse(BaseModel):
     title: str
     created_at: str
     updated_at: str
+    agent_id: Optional[str] = None
+    agent_version: Optional[int] = None
 
     @classmethod
     def from_entity(cls, session: ChatSession) -> "SessionResponse":
@@ -29,6 +35,8 @@ class SessionResponse(BaseModel):
             title=session.title,
             created_at=session.created_at.isoformat(),
             updated_at=session.updated_at.isoformat(),
+            agent_id=session.agent_id,
+            agent_version=session.agent_version,
         )
 
 

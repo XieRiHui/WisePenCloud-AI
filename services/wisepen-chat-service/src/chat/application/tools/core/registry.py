@@ -49,7 +49,6 @@ class ToolRegistry:
         self,
         *,
         tool_context: dict[str, Any] | None = None,
-        runtime_discovered_tools: Iterable[Tool] | None = None,
         expose_tool_name_set: set[str] | None = None,
         allow_tool_name_set: set[str] | None = None,
         deny_tool_name_set: set[str] | None = None,
@@ -58,8 +57,6 @@ class ToolRegistry:
         deny_tool_name_set = deny_tool_name_set or set()
 
         tools: dict[str, Tool] = dict(self._tools)
-        for tool in runtime_discovered_tools or []:
-            tools[tool.definition.llm_spec.name] = tool
 
         filtered_tools: dict[str, Tool] = {}
         for name, tool in tools.items():

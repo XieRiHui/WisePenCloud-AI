@@ -39,7 +39,7 @@ class ValidSkillAssetPathCheck(ToolPreflightHook):
                                        message=f"Skill '{skill_id}' not found.")
 
         # Manifest path 校验
-        path_to_object_key = {asset.path: asset.object_key for asset in skill.assets_manifest}
+        path_to_object_key = {asset.path : asset.object_key for asset in skill.assets_manifest}
         if path not in path_to_object_key:
             return ToolPreflightResult(ok=False,
                                        message=f"Asset path '{path}' is not declared for skill '{skill_id}'.")

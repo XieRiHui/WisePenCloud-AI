@@ -20,6 +20,9 @@ from chat.core.persistence import (
     RedisHotContext,
 )
 from chat.application.chat_turn_coordinator import ChatTurnCoordinator
+from chat.application.agents import (
+    DefaultAgentResolver,
+)
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
 from chat.application.tools.skill_tools import LoadSkillAssetTool
 from chat.application.tools.skill_tools import LoadSkillTool
@@ -101,6 +104,7 @@ class Container(containers.DeclarativeContainer):
         DefaultSkillMatcher,
         ai_asset_client=ai_asset_client,
     )
+    agent_resolver = providers.Singleton(DefaultAgentResolver)
     kafka_producer = providers.Singleton(
         KafkaProducerClient,
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
@@ -150,6 +154,7 @@ class Container(containers.DeclarativeContainer):
         tool_registry=tool_registry,
         kafka_producer=kafka_producer,
         skill_matcher=skill_matcher,
+        agent_resolver=agent_resolver,
     )
 
 
