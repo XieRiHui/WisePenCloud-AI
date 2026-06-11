@@ -27,7 +27,7 @@ from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillM
 from chat.application.tools.skill_tools import LoadSkillAssetTool
 from chat.application.tools.skill_tools import LoadSkillTool
 from chat.application.tools.core import ToolRegistry
-from chat.application.tools.session_tools.search_history_tool import SearchHistoricalMessagesTool
+from chat.application.tools.session_tools.get_historical_chat_messages_tool import GetHistoricalChatMessagesTool
 from chat.core.config.nacos import nacos_client_manager
 from chat.service_client import FileStorageClient, AIAssetClient, ResourceClient
 from common.cloud.service_discovery import ServiceDiscovery
@@ -111,9 +111,9 @@ class Container(containers.DeclarativeContainer):
     )
 
     # 工具层：各 Tool 和 ToolRegistry 均为 Singleton，由容器统一管理生命周期
-    # SearchHistoricalMessagesTool
+    # GetHistoricalChatMessagesTool
     search_history_tool = providers.Singleton(
-        SearchHistoricalMessagesTool,
+        GetHistoricalChatMessagesTool,
         message_repo=message_repo,
     )
     # LoadSkillTool / LoadSkillAssetTool

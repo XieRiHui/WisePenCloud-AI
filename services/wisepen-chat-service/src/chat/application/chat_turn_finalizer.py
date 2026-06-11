@@ -1,11 +1,11 @@
-from copy import deepcopy
+﻿from copy import deepcopy
 from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
 
 from chat.application.agents import AgentMemoryPolicy
 from chat.application.chat_context_assembler import WindowedMessages
-from common.logger import log_error
+from common.logger import error
 
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
@@ -100,7 +100,7 @@ class ChatTurnFinalizer:
             try:
                 await self.hot_context_repo.append_messages(session_id, chat_record_messages)
             except Exception as e:
-                log_error("Redis 上下文追加", e, session=session_id)
+                error("chat record message hot-context append failed.", session_id=session_id, exc=e)
 
         # 处理持久化占位符，如果有占位符应使用占位符替换原本的内容
         chat_record_messages = self.messages_placeholder_handler(chat_record_messages)
@@ -113,14 +113,14 @@ class ChatTurnFinalizer:
 
                 await self.message_repo.save_messages(chat_record_messages)
             except Exception as e:
-                log_error("MongoDB 消息归档", e, session=session_id)
+                error("chat record message archive failed.", session_id=session_id, exc=e)
 
         # Memory 摄入 (摄入占位符处理的消息内容)
         if memory_policy.enable_long_term_memory:
             try:
                 await self.memory.add_interaction(user_id=user_id, messages=chat_record_messages)
             except Exception as e:
-                log_error("长期记忆写入", e, user=user_id)
+                error("chat record message write long-term memory failed.", user_id=user_id, exc=e)
 
 
     async def auto_generate_title(self, session_id: str, user_id: str, user_query: str) -> None:
@@ -157,7 +157,7 @@ class ChatTurnFinalizer:
 
             await self.session_repo.rename_session(session_id, user_id, new_title)
         except Exception as e:
-            log_error("自动生成标题", e, session=session_id)
+            error("chat title generation failed.", session_id=session_id, exc=e)
 
     async def summarize_and_compress(
         self,
@@ -221,7 +221,7 @@ class ChatTurnFinalizer:
             )
             new_summary = message_response.raw.choices[0].message.content or ""
         except Exception as e:
-            log_error("摘要生成", e, session=session_id)
+            error("chat summary generation failed.", session_id=session_id, exc=e)
             return
 
         if not new_summary.strip():
@@ -232,7 +232,7 @@ class ChatTurnFinalizer:
             await self.session_repo.update_session_summary(session_id=session_id, current_summary=new_summary,
                                                            summary_updated_at=datetime.now(timezone.utc))
         except Exception as e:
-            log_error("摘要持久化", e, session=session_id)
+            error("chat summary persist failed.", session_id=session_id, exc=e)
 
         # Redis 重载 messages_keep
         try:
@@ -241,4 +241,5 @@ class ChatTurnFinalizer:
                 messages=windowed_history_messages.messages_keep + chat_record_messages,
             )
         except Exception as e:
-            log_error("Redis 上下文重载", e, session=session_id)
+            error("redis hot context reload failed.", session_id=session_id, exc=e)
+

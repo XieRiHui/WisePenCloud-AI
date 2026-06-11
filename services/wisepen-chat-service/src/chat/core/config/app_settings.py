@@ -1,4 +1,4 @@
-import yaml
+﻿import yaml
 import asyncio
 import threading
 from pathlib import Path
@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from chat.core.config.nacos import nacos_client_manager
-from common.logger import log_event, log_error
+from common.logger import error, info
 
 SERVICE_ROOT = Path(__file__).resolve().parents[4]
 
@@ -126,13 +126,14 @@ def _run_async(coro):
 
 def load_settings() -> AppSettings:
     try:
-        log_event("从 Nacos 拉取核心业务配置")
+        info("nacos app config pulling.")
         raw_yaml = _run_async(nacos_client_manager.pull_config())
         config_dict = yaml.safe_load(raw_yaml) if raw_yaml else {}
         return AppSettings(**(config_dict or {}))
     except Exception as e:
-        log_error("Nacos 配置拉取或解析", e)
+        error("nacos app config pull failed.", exc=e)
         raise
 
 
 settings = load_settings()
+

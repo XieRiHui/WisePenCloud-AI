@@ -1,7 +1,7 @@
-from dataclasses import field, dataclass
+﻿from dataclasses import field, dataclass
 from typing import Any, Dict, List, Optional
 
-from common.logger import log_fail, log_error
+from common.logger import error, warn
 
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role, ChatSession
@@ -31,7 +31,7 @@ class ChatContextAssembler:
         self.session_repo = session_repo
         self.hot_context_repo = hot_context_repo
 
-    async def get_or_repopulate_hot_context(self, session_id: str) -> List[ChatMessage]:
+    async def get_chat_history_record_messages(self, session_id: str) -> List[ChatMessage]:
         """
         从 Redis 拉取短期上下文
         若返回空列表（缓存过期或异常），则从 MongoDB 回填最近 N 条记录，重建热缓存
@@ -40,7 +40,7 @@ class ChatContextAssembler:
         try:
             recent_messages = await self.hot_context_repo.get_recent_context(session_id)
         except Exception as e:
-            log_fail("Redis 上下文读取", e, session=session_id)
+            warn("get chat history record messages from read redis hot-context failed.", session_id=session_id, exc=e)
             recent_messages = []
 
         if not recent_messages:
@@ -57,7 +57,7 @@ class ChatContextAssembler:
                     await self.hot_context_repo.load_messages(session_id, history)
                     return history
             except Exception as e:
-                log_error("Redis 上下文回填", e, session=session_id)
+                error("chat history record messages repopulate failed.", session_id=session_id, exc=e)
 
         return recent_messages
 
@@ -199,3 +199,4 @@ class ChatContextAssembler:
                 "Skills:\n"
                 + "\n".join(skill_lines)
         )
+

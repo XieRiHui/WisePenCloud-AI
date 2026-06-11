@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import hashlib
@@ -10,7 +10,7 @@ from typing import Dict, Optional
 import httpx
 
 from chat.service_client.file_storage_service_client import FileStorageClient
-from common.logger import log_error, log_event, log_fail
+from common.logger import error, info, warn
 
 from chat.domain.interfaces.file_loader import FileLoader
 
@@ -45,8 +45,8 @@ class OssFileLoader(FileLoader):
     async def start(self) -> None:
         if self._gc_task is None or self._gc_task.done():
             self._gc_task = asyncio.create_task(self._gc_loop(), name="skill-asset-cache-gc")
-            log_event(
-                "OSS Object 磁盘缓存 GC 启动",
+            info(
+                "oss object disk cache gc started.",
                 cache_dir=str(self._cache_dir),
                 ttl_seconds=int(self._cache_ttl),
                 interval_seconds=int(self._gc_interval),
@@ -102,7 +102,7 @@ class OssFileLoader(FileLoader):
             # 按字节读，资产可能是 .py/.md 文本，也可能是 .png/.pdf/.wasm 等二进制
             return cache_path.read_bytes()
         except OSError as e:
-            log_fail("OSS Object 磁盘缓存读取", e, cache_path=str(cache_path))
+            warn("oss object disk cache read failed.", cache_path=str(cache_path), exc=e)
             return None
 
     def _atomic_write(self, cache_path: Path, content: bytes) -> None:
@@ -127,10 +127,10 @@ class OssFileLoader(FileLoader):
             resp = await self._http.get(url)
             resp.raise_for_status()
         except httpx.HTTPError as e:
-            log_error("OSS Object 下载", e, object_key=object_key)
+            error("oss object download failed.", object_key=object_key, exc=e)
             raise
         content = resp.content
-        log_event("OSS Object 写入磁盘缓存", object_key=object_key, bytes=len(content))
+        info("oss object written to disk cache.", object_key=object_key, bytes=len(content))
         return content
 
     async def _gc_loop(self) -> None:
@@ -149,8 +149,8 @@ class OssFileLoader(FileLoader):
                             p.unlink(missing_ok=True)
                             removed += 1
                     except OSError as e:
-                        log_fail("OSS Object 磁盘缓存GC", e, path=str(p))
+                        warn("oss object disk cache gc failed.", path=str(p), exc=e)
                 if removed:
-                    log_event("OSS Object 磁盘缓存GC", removed=removed, ttl_seconds=int(self._cache_ttl))
+                    info("oss object disk cache gc finished.", removed=removed, ttl_seconds=int(self._cache_ttl))
         except asyncio.CancelledError:
             raise

@@ -82,21 +82,21 @@ class LoadSkillTool:
         skill_md = await self._load_skill_md(skill)
 
         lines = [
-            f"[Loaded Skill] skill_id={skill.skill_id} version={skill.version}",
-            f"[Name] {skill.name}",
-            "",
-            "===== SKILL.md BEGIN =====",
+            f"[Loaded Skill] skill_id={skill.skill_id} version={skill.version} name= {skill.name}",
+            "<skill>",
             skill_md.rstrip(),
-            "===== SKILL.md END =====",
+            "</skill>",
         ]
 
         if skill.assets_manifest:
             lines.append("")
-            lines.append("[Assets Manifest] (use load_skill_asset to open any of these)")
+            lines.append("<assets_manifest>")
             for asset in skill.assets_manifest:
                 lines.append(
-                    f"- path={asset.path} kind={asset.kind} size={asset.size_bytes}  — {asset.description}"
+                    f"-(path={asset.path} kind={asset.kind} size={asset.size_bytes}): {asset.description}"
                 )
+            lines.append("</assets_manifest>")
+            lines.append("Use `load_skill_asset` to open any of assets manifests.")
 
         return "\n".join(lines)
 

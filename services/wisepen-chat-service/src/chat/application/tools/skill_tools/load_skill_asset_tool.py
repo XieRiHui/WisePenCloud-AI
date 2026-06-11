@@ -139,7 +139,7 @@ class LoadSkillAssetTool:
 
         return (
             f"[Loaded Skill Asset] skill_id={skill_id} path={path}\n"
-            f"===== Skill Asset BEGIN =====\n"
+            f"<skill_asset>\n"
             f"{content}\n"
-            f"===== Skill Asset END ====="
+            f"</skill_asset>"
         )

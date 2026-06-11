@@ -1,4 +1,4 @@
-import json
+﻿import json
 import uuid
 from typing import Dict, List, Optional, Iterator, AsyncIterator, Union
 
@@ -8,7 +8,7 @@ from chat.application.tools import ToolScope
 from chat.application.tools.core.execution.dispatcher import ToolDispatcher
 from chat.application.tools.core.llm.invocation import ToolCallMessageAccumulator, tool_call_parse
 from chat.application.tools.core.llm.renderer import tool_result_renderer
-from common.logger import log_fail
+from common.logger import warn
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
 from chat.domain.interfaces import LLMProvider
@@ -317,16 +317,17 @@ class QueryLoopRuntime:
         self, session_id: str
     ) -> AsyncIterator[StreamEvent]:
         """Agent 循环超出最大迭代次数时的兜底文本输出"""
-        warn = f"Agent 推理超出最大迭代次数{settings.AGENT_MAX_ITERATIONS}，未能生成最终答案"
-        log_fail("工具调用", warn, session=session_id)
+        warning_text = f"Agent 推理超出最大迭代次数{settings.AGENT_MAX_ITERATIONS}，未能生成最终答案"
+        warn("tool calling loop exhausted.", session_id=session_id)
         text_id = f"txt_{uuid.uuid4().hex}"
         yield StepStartEvent()
         yield TextStartEvent(text_id=text_id)
-        yield TextDeltaEvent(text_id=text_id, delta=warn)
+        yield TextDeltaEvent(text_id=text_id, delta=warning_text)
         yield TextEndEvent(text_id=text_id)
         final_message = ChatMessage(
             session_id=session_id,
             role=Role.ASSISTANT,
-            content=warn,
+            content=warning_text,
         )
         yield StepFinishEvent(is_finished=True, final_assistant_message=final_message, usage_tokens=0)
+

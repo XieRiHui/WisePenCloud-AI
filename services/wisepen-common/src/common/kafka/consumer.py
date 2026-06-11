@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from aiokafka import AIOKafkaConsumer
 
-from common.logger import log_error, log_event
+from common.logger import error, info
 
 
 MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
@@ -41,11 +41,11 @@ class KafkaConsumerClient:
         try:
             await self._consumer.start()
         except Exception as e:
-            log_error("Kafka Consumer 启动", e, topic=self.topic, group_id=self.group_id)
+            error("kafka consumer start failed.", topic=self.topic, group_id=self.group_id, exc=e)
             self._consumer = None
             return
         self._task = asyncio.create_task(self._consume_loop(), name=f"kafka-consumer-{self.topic}")
-        log_event("Kafka Consumer 已启动", topic=self.topic, group_id=self.group_id)
+        info("kafka consumer started.", topic=self.topic, group_id=self.group_id)
 
     async def stop(self) -> None:
         if self._task is not None:
@@ -58,7 +58,7 @@ class KafkaConsumerClient:
         if self._consumer is not None:
             await self._consumer.stop()
             self._consumer = None
-            log_event("Kafka Consumer 已停止", topic=self.topic, group_id=self.group_id)
+            info("kafka consumer stopped.", topic=self.topic, group_id=self.group_id)
 
     async def _consume_loop(self) -> None:
         assert self._consumer is not None
@@ -69,9 +69,9 @@ class KafkaConsumerClient:
                     await self._handler(payload)
                     await self._consumer.commit()
                 except Exception as e:
-                    log_error(
-                        "Kafka Consumer 消费",
-                        e,
+                    error(
+                        "kafka event consumption failed.",
+                        exc=e,
                         topic=self.topic,
                         partition=msg.partition,
                         offset=msg.offset,
@@ -79,7 +79,7 @@ class KafkaConsumerClient:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            log_error("Kafka Consumer 循环", e, topic=self.topic, group_id=self.group_id)
+            error("kafka consumer loop failed.", topic=self.topic, group_id=self.group_id, exc=e)
 
     @staticmethod
     def _decode_message(value: bytes | bytearray | memoryview | str | dict[str, Any]) -> dict[str, Any]:

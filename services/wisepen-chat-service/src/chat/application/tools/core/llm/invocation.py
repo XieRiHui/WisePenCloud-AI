@@ -1,8 +1,8 @@
-import json
-from dataclasses import dataclass, field
+﻿import json
+from dataclasses import dataclass
 from typing import Any
 
-from common.logger import log_fail
+from common.logger import warn
 
 
 @dataclass
@@ -28,11 +28,15 @@ def tool_call_parse(accumulators: dict[int, ToolCallMessageAccumulator], *, quer
         acc = accumulators[idx]
         try:
             tool_call_arguments = json.loads(acc.tool_call_argument_str) if acc.tool_call_argument_str else {}
-        except json.JSONDecodeError as exc:
-            log_fail("tool_call arguments 解析", exc, tool_name=acc.tool_name)
+        except json.JSONDecodeError as e:
+            warn("tool call arguments parse failed.", tool_name=acc.tool_name, exc=e)
             tool_call_arguments = {}
         if not isinstance(tool_call_arguments, dict):
-            log_fail("tool_call arguments 解析", TypeError, tool_name=acc.tool_name, parsed_type=type(tool_call_arguments).__name__)
+            warn(
+                "tool call arguments parse failed beacuse arguments is not a JSON object",
+                tool_name=acc.tool_name,
+                arguments_parsed_type=type(tool_call_arguments).__name__,
+            )
             tool_call_arguments = {}
         invocations.append(
             ToolInvocation(
@@ -41,3 +45,4 @@ def tool_call_parse(accumulators: dict[int, ToolCallMessageAccumulator], *, quer
             )
         )
     return invocations
+

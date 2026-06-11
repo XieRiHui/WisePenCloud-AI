@@ -1,8 +1,8 @@
-from typing import Optional, List, Dict, Any, Set
+﻿from typing import Optional, List, Dict, Any, Set
 from beanie import PydanticObjectId
 from fastapi import BackgroundTasks
 
-from common.logger import log_error
+from common.logger import error
 
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
@@ -24,9 +24,10 @@ from chat.application.tools.core import ToolRegistry
 from common.kafka.producer import KafkaProducerClient
 
 
-# Skill 工具默认不暴露；仅在本轮存在可展示 Skill 时整体解禁。
+# Skill 工具默认不暴露；仅在本轮存在可展示 Skill 时整体解禁
 _SKILL_TOOL_NAMES = frozenset({"load_skill", "load_skill_asset"})
-
+# Session 工具默认不暴露；仅在本轮存在存在不可见的上下文历史时解禁（有summary）
+_SESSION_TOOL_NAMES = frozenset({"get_historical_chat_messages"})
 
 class ChatTurnCoordinator:
     """
@@ -117,7 +118,7 @@ class ChatTurnCoordinator:
         # 加载会话历史 (若启用)
         # 从 Redis 读取最近对话, 如果 Redis 缓存失效，会自动从 MongoDB 回填最近的 N 条历史，确保对话连贯性
         if memory_policy.enable_chat_memory:
-            chat_history_record_messages = await self._context_assembler.get_or_repopulate_hot_context(session_id)
+            chat_history_record_messages = await self._context_assembler.get_chat_history_record_messages(session_id)
         else:
             chat_history_record_messages = []
 
@@ -169,9 +170,13 @@ class ChatTurnCoordinator:
 
         expose_tool_name_set = None
         if available_skills:
-            expose_tool_name_set = set(_SKILL_TOOL_NAMES)
+            expose_tool_name_set = set()
+            expose_tool_name_set.update(_SKILL_TOOL_NAMES)
             # allowed_skill_ids 表示本轮展示给 LLM 的 Skill 白名单，工具执行前仍会校验
             tool_context["allowed_skill_ids"] = [s.skill_id for s in available_skills]
+
+        if session_summary is not None:
+            expose_tool_name_set.update(_SESSION_TOOL_NAMES)
 
         # 构建工具视图
         # expose_tool_name_set 仅在有可展示 Skill 时解禁 Skill 工具
@@ -242,7 +247,7 @@ class ChatTurnCoordinator:
                         chat_record_messages.append(event.final_assistant_message)
                 yield to_vercel_sse(event)
         except ServiceException as e:
-            log_error("LLM 流式推理", e, session=session_id)
+            error("chat stream generation failed.", session_id=session_id, exc=e)
             yield to_vercel_sse(ErrorEvent(error_text=str(e)))
             return
 

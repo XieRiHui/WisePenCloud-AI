@@ -1,6 +1,6 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import Dict, Any, Optional
-from common.logger import log_error
+from common.logger import error
 
 from chat.core.config.app_settings import settings
 from chat.application.tools.core import (
@@ -14,7 +14,7 @@ from chat.application.tools.core import (
 from chat.domain.repositories import MessageRepository
 
 
-class SearchHistoricalMessagesTool:
+class GetHistoricalChatMessagesTool:
     """
     历史消息全文检索工具。
     Schema 中不暴露 session_id，该字段由系统通过 context 强注入，防止 LLM 幻觉伪造导致越权访问。
@@ -48,17 +48,18 @@ class SearchHistoricalMessagesTool:
         }
         self._definition = ToolDefinition(
             llm_spec=ToolLLMSpec(
-                name="search_historical_messages",
+                name="get_historical_chat_messages",
                 description=(
-                    "Search historical chat messages by keyword and optional time range. "
+                    "Get historical chat messages by keyword and optional time range. "
                     "Use this when you need to recall specific facts, events, or details "
-                    "from earlier in the conversation that may not be in the current context window."
-                    "NOTE that the search keyword's language should match the user's chat language; otherwise, the search may fail. If no results are found, consider switching the keyword's language."
+                    "from earlier in the chat that may not be in the current context window."
+                    "NOTE that the search keyword's language should match the user's chat language; otherwise, the search may fail. "
+                    "If no results are found, consider switching the keyword's language."
                 ),
                 parameters_schema=ToolParametersSchema(parameters_schema),
             ),
             policy=ToolPolicy(
-                expose_by_default=True,
+                expose_by_default=False,
                 persist_output=True,
                 risk_level=ToolRiskLevel.LOW,
                 required_context_keys=("session_id",),
@@ -104,7 +105,7 @@ class SearchHistoricalMessagesTool:
                                                                        start_time=start_time, end_time=end_time,
                                                                        limit=limit)
         except Exception as e:
-            log_error("历史消息全文检索", e, session=session_id, keyword=keyword)
+            error("history message full text search failed.", session_id=session_id, keyword=keyword, exc=e)
             raise ToolExecutionError(
                 reason="history_search_failed",
                 detail_reason=f"Search failed: {type(e).__name__}",
@@ -113,14 +114,16 @@ class SearchHistoricalMessagesTool:
             ) from e
 
         if not results:
-            return f"[Tool Result] No messages found for keyword: '{keyword}'."
+            return f"[Got Historical Chat Messages] No historical chat message found for keyword: '{keyword}'."
 
-        lines = [f"[{m.role.value}] ({m.created_at.isoformat()}): {m.content}" for m in results]
-        raw = "\n".join(lines)
+        raw = "[Got Historical Chat Messages]\n".join(
+            [f"-(role={m.role.value} created={m.created_at.isoformat()}): {m.content}" for m in results]
+        )
 
         # 字符截断，防止超长结果在后续迭代中撑爆上下文水位
         if len(raw) > settings.TOOL_RESULT_MAX_CHARS:
             raw = raw[:settings.TOOL_RESULT_MAX_CHARS] + "\n...[truncated]"
 
         return raw
+
 

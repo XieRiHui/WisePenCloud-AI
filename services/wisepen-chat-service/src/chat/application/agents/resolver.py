@@ -1,6 +1,6 @@
-from typing import Protocol
+﻿from typing import Protocol
 
-from common.logger import log_error
+from common.logger import error
 
 from chat.application.agents.default_agent import DEFAULT_AGENT_ID, build_default_agent
 from chat.application.agents.models import Agent
@@ -38,6 +38,7 @@ class CompositeAgentResolver:
                 if agent is not None:
                     return agent
             except Exception as e:
-                log_error("Agent resolve primary failed", e, agent_id=agent_id)
+                error("agent primary resolver failed.", agent_id=agent_id, exc=e)
 
         return await self._fallback.resolve(agent_id)
+
