@@ -6,7 +6,6 @@ from common.logger import error
 
 from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
-from chat.application.chat_message_projector import ChatMessageProjector
 from chat.application.llm_provider_resolver import LLMProviderResolver
 from chat.application.token_counter import TokenCounter
 from chat.domain.interfaces.llm import TextCompletionProvider
@@ -43,7 +42,6 @@ class ChatTurnCoordinator:
             llm_provider_resolver: LLMProviderResolver,
             text_llm: TextCompletionProvider,
             token_counter: TokenCounter,
-            message_projector: ChatMessageProjector,
             memory: MemoryProvider,
             model_repo: ModelRepository,
             provider_repo: ProviderRepository,
@@ -68,7 +66,6 @@ class ChatTurnCoordinator:
         )
         self._turn_finalizer = ChatTurnFinalizer(
             text_llm=text_llm,
-            message_projector=message_projector,
             memory=memory,
             message_repo=message_repo, session_repo=session_repo, hot_context_repo=hot_context_repo,
             provider_repo=provider_repo,

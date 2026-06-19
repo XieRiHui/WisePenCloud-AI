@@ -2,6 +2,7 @@ from enum import Enum
 import jieba
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
+from copy import deepcopy
 from beanie import Document
 from pydantic import Field, BaseModel
 from pymongo import IndexModel, ASCENDING
@@ -102,3 +103,16 @@ class ChatMessage(Document):
             # 过滤掉单字和标点符号，用空格拼接
             words = jieba.cut_for_search(self.content)
             self.content_search_tokens = " ".join([w for w in words if len(w.strip()) > 1])
+
+    @classmethod
+    def for_persistence(cls, messages: List["ChatMessage"]) -> List["ChatMessage"]:
+        """
+        若工具结果不应完整持久化，则用占位符替换 content，避免把大段原始工具输出写入长期存储
+        """
+        persisted_messages = deepcopy(messages)
+        for message in persisted_messages:
+            if message.persisted_output_placeholder is None:
+                continue
+            message.content = message.persisted_output_placeholder
+            message.persisted_output_placeholder = None
+        return persisted_messages

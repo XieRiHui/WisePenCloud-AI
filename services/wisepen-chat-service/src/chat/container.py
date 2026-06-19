@@ -16,7 +16,6 @@ from chat.core.providers import (
     OssFileLoader,
     QwenAdapter,
 )
-from chat.application.chat_message_projector import ChatMessageProjector
 from chat.application.llm_provider_resolver import LLMProviderResolver
 from chat.application.token_counter import TokenCounter
 from chat.core.persistence import (
@@ -71,7 +70,6 @@ class Container(containers.DeclarativeContainer):
         litellm_adapter=litellm_adapter,
     )
     token_counter = providers.Singleton(TokenCounter)
-    message_projector = providers.Singleton(ChatMessageProjector)
     memory_provider = providers.Singleton(Mem0Adapter)
 
     session_repo = providers.Singleton(MongoSessionRepository)
@@ -168,7 +166,6 @@ class Container(containers.DeclarativeContainer):
         llm_provider_resolver=llm_provider_resolver,
         text_llm=litellm_adapter,
         token_counter=token_counter,
-        message_projector=message_projector,
         memory=memory_provider,
         model_repo=model_repo,
         provider_repo=provider_repo,

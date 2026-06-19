@@ -4,7 +4,6 @@ import uuid
 
 from chat.application.agents import AgentMemoryPolicy
 from chat.application.chat_context_assembler import WindowedMessages
-from chat.application.chat_message_projector import ChatMessageProjector
 from common.logger import error
 
 from chat.core.config.app_settings import settings
@@ -25,7 +24,6 @@ class ChatTurnFinalizer:
     def __init__(
         self,
         text_llm: TextCompletionProvider,
-        message_projector: ChatMessageProjector,
         memory: MemoryProvider,
         message_repo: MessageRepository,
         session_repo: SessionRepository,
@@ -34,7 +32,6 @@ class ChatTurnFinalizer:
         kafka_producer: KafkaProducerClient,
     ):
         self.text_llm = text_llm
-        self.message_projector = message_projector
         self.memory = memory
         self.session_repo = session_repo
         self.message_repo = message_repo
@@ -97,7 +94,7 @@ class ChatTurnFinalizer:
                 error("chat record message hot-context append failed.", session_id=session_id, exc=e)
 
         # 处理持久化占位符，如果有占位符应使用占位符替换原本的内容
-        chat_record_messages = self.message_projector.for_persistence(chat_record_messages)
+        chat_record_messages = ChatMessage.for_persistence(chat_record_messages)
 
         # MongoDB 落盘 (落占位符处理的消息内容)
         if memory_policy.enable_persistence_chat_memory:
@@ -168,7 +165,7 @@ class ChatTurnFinalizer:
             return
 
         # 处理持久化占位符，如果有占位符应使用占位符替换原本的内容
-        chat_record_messages = self.message_projector.for_persistence(chat_record_messages)
+        chat_record_messages = ChatMessage.for_persistence(chat_record_messages)
 
         # 构建摘要输入，将 existing_summary（上一轮摘要，如有）作为前缀，拼接 messages_compress_candidates 明细，让轻量模型生成覆盖范围更广的全局摘要
         oldest_text = "\n".join(
