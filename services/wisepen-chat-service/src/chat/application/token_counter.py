@@ -45,8 +45,9 @@ class TokenCounter:
         formatted_messages = []
         for message in messages:
             if message.role == Role.ASSISTANT:
-                payload = {"role": message.role.value, "content": message.content, "reasoning": message.reasoning_content, "tool_calls": []}
+                payload = {"role": message.role.value, "content": message.content, "reasoning": message.reasoning_content}
                 if message.tool_calls:
+                    payload["tool_calls"] = []
                     for tool_call in message.tool_calls:
                         payload['tool_calls'].append({
                             "id": tool_call.call_id,

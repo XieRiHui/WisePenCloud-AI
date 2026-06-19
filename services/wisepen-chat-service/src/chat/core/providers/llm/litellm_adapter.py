@@ -217,8 +217,9 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
 
         # 保存 OpenAI-compatible assistant message，供下一轮协议回放
         assistant_message = {
-                    "role": "assistant",
-                    "content": assistant_text or None,
-                    "tool_calls": tool_call_payloads,
-                }
+            "role": "assistant",
+            "content": assistant_text or None,
+        }
+        if tool_call_payloads:
+            assistant_message["tool_calls"] = tool_call_payloads
         yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={ "message": assistant_message })

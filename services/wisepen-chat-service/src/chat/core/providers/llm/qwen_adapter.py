@@ -134,8 +134,9 @@ class QwenAdapter(LLMProvider):
             "role": "assistant",
             "content": assistant_text or None,
             "reasoning_content": reasoning_text or None,
-            "tool_calls": tool_call_payloads,
         }
+        if tool_call_payloads:
+            assistant_message["tool_calls"] = tool_call_payloads
         yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={"message": assistant_message})
 
     @staticmethod
