@@ -4,6 +4,7 @@ import uuid
 
 from chat.application.agents import AgentMemoryPolicy
 from chat.application.chat_context_assembler import WindowedMessages
+from chat.application.token_counter import TokenCounter
 from common.logger import error
 
 from chat.core.config.app_settings import settings
@@ -24,6 +25,7 @@ class ChatTurnFinalizer:
     def __init__(
         self,
         text_llm: TextCompletionProvider,
+        token_counter: TokenCounter,
         memory: MemoryProvider,
         message_repo: MessageRepository,
         session_repo: SessionRepository,
@@ -32,6 +34,7 @@ class ChatTurnFinalizer:
         kafka_producer: KafkaProducerClient,
     ):
         self.text_llm = text_llm
+        self.token_counter = token_counter
         self.memory = memory
         self.session_repo = session_repo
         self.message_repo = message_repo
@@ -86,6 +89,9 @@ class ChatTurnFinalizer:
     ) -> None:
         """后台统一处理所有存储逻辑: Redis 追加 → placeholder 裁剪 → MongoDB 落盘 → Memory 摄入"""
 
+        # Redis 热上下文保留原始消息，因此先按原始内容填充 token 计数
+        await self._fill_content_token_count(chat_record_messages)
+
         # Redis 追加
         if memory_policy.enable_chat_memory:
             try:
@@ -95,6 +101,8 @@ class ChatTurnFinalizer:
 
         # 处理持久化占位符，如果有占位符应使用占位符替换原本的内容
         chat_record_messages = ChatMessage.for_persistence(chat_record_messages)
+        # MongoDB / Memory 使用占位符裁剪后的内容，token 计数也应与裁剪后的内容一致
+        await self._fill_content_token_count(chat_record_messages, force=True)
 
         # MongoDB 落盘 (落占位符处理的消息内容)
         if memory_policy.enable_persistence_chat_memory:
@@ -166,6 +174,7 @@ class ChatTurnFinalizer:
 
         # 处理持久化占位符，如果有占位符应使用占位符替换原本的内容
         chat_record_messages = ChatMessage.for_persistence(chat_record_messages)
+        await self._fill_content_token_count(chat_record_messages, force=True)
 
         # 构建摘要输入，将 existing_summary（上一轮摘要，如有）作为前缀，拼接 messages_compress_candidates 明细，让轻量模型生成覆盖范围更广的全局摘要
         oldest_text = "\n".join(
@@ -233,3 +242,9 @@ class ChatTurnFinalizer:
             )
         except Exception as e:
             error("redis hot context reload failed.", session_id=session_id, exc=e)
+
+    async def _fill_content_token_count(self, messages: List[ChatMessage], force: bool = False) -> None:
+        for msg in messages:
+            if not force and msg.content_token_count:
+                continue
+            msg.content_token_count = await self.token_counter.count_messages([msg])

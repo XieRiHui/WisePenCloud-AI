@@ -66,6 +66,7 @@ class ChatTurnCoordinator:
         )
         self._turn_finalizer = ChatTurnFinalizer(
             text_llm=text_llm,
+            token_counter=token_counter,
             memory=memory,
             message_repo=message_repo, session_repo=session_repo, hot_context_repo=hot_context_repo,
             provider_repo=provider_repo,

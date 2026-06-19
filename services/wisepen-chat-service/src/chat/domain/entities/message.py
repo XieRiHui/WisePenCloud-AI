@@ -79,6 +79,7 @@ class ChatMessage(Document):
     token_usage: int = 0
 
     content: Optional[str] = None   # 返回内容
+    content_token_count: int = 0 # 消息 token 计数，用于上下文压缩
 
     # 内容搜索分词，用于规避 MongoDB 中文分词缺陷
     content_search_tokens: Optional[str] = None

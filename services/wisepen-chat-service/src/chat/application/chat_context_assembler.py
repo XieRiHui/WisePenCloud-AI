@@ -84,19 +84,19 @@ class ChatContextAssembler:
         high_budget = int(prompt_budget_tokens * high_ratio)
         low_budget = int(prompt_budget_tokens * low_ratio)
 
-        total_token = 0
+        contents_token_count = 0
 
         windowed_messages = WindowedMessages()
 
         for msg in reversed(chat_history_record_messages):
-            total_token += msg.token_count or 0
-            if total_token <= low_budget:
+            contents_token_count += msg.content_token_count or 0
+            if contents_token_count <= low_budget:
                 windowed_messages.messages_keep.insert(0, msg)  # 保留在 messages_keep
             else:
                 windowed_messages.messages_compress_candidates.insert(0, msg)  # 超出低水位，进入 messages_compress_candidates
 
         # 当整体 Token 超过高水位时，触发需要压缩的标志
-        windowed_messages.needs_compression = total_token >= high_budget # 由于高水位线（如 80%）预留了安全 Buffer，即便把它们全发给模型，也不会触发 Token 溢出报错
+        windowed_messages.needs_compression = contents_token_count >= high_budget # 由于高水位线（如 80%）预留了安全 Buffer，即便把它们全发给模型，也不会触发 Token 溢出报错
 
         return windowed_messages
 
