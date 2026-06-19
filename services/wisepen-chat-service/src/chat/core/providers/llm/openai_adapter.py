@@ -37,14 +37,14 @@ class OpenAIAdapter(LLMProvider):
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "effort": {"type": "string", "enum": ["low", "medium", "high"]},
+                            "effort": {"type": "string", "enum": ["none", "minimal", "low", "medium", "high", "xhigh"]},
                             "summary": {"type": "string", "enum": ["auto", "concise", "detailed"]},
                         },
                     },
                 },
             },
             "defaults": {
-                "temperature": 0.7,
+                "reasoning": {"effort": "medium", "summary": "auto"},
             },
         }
 

@@ -33,16 +33,31 @@ class AnthropicAdapter(LLMProvider):
                 "properties": {
                     "thinking": {
                         "type": "object",
-                        "additionalProperties": False,
-                        "required": ["type", "budget_tokens"],
-                        "properties": {
-                            "type": {"type": "string", "enum": ["enabled"]},
-                            "budget_tokens": {"type": "integer", "minimum": 1024},
-                        },
+                        "oneOf": [
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["type", "budget_tokens"],
+                                "properties": {
+                                    "type": {"type": "string", "const": "enabled"},
+                                    "budget_tokens": {"type": "integer", "minimum": 1024},
+                                },
+                            },
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["type"],
+                                "properties": {
+                                    "type": {"type": "string", "const": "adaptive"},
+                                },
+                            },
+                        ],
                     },
                 },
             },
-            "defaults": {},
+            "defaults": {
+                "thinking": {"type": "adaptive"},
+            },
         }
 
     async def stream_chat_completion(

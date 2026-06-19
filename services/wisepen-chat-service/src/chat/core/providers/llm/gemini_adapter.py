@@ -50,6 +50,7 @@ class GeminiAdapter(LLMProvider):
             },
             "defaults": {
                 "temperature": 0.7,
+                "thinking_config": {"thinking_budget": -1}, # 模型按任务复杂度自动决定 thinking budget
             },
         }
 

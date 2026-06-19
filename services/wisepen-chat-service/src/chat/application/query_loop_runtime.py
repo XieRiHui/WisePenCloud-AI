@@ -117,6 +117,15 @@ class _StepEventInterpreter:
 # QueryLoopRuntime
 # =============================================================================
 
+def _merge_runtime_options(defaults: dict, overrides: dict) -> dict:
+    result = dict(defaults or {})
+    for key, value in (overrides or {}).items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _merge_runtime_options(result[key], value)
+        else:
+            result[key] = value
+    return result
+
 class QueryLoopRuntime:
     """
     负责与 LLM 的全部交互：支持并行 Tool Calling（asyncio.gather）和多轮推理循环（while + MAX_ITERATIONS）
@@ -142,12 +151,15 @@ class QueryLoopRuntime:
         llm_provider = self._llm_provider_resolver.resolve(model_info)
 
         # 检查模型参数是否正确
-        schema = llm_provider.runtime_options_manifest()["json_schema"]
+        manifest = llm_provider.runtime_options_manifest()
+        # 合并默认参数
+        runtime_options = _merge_runtime_options(manifest.get("defaults") or {}, model_info.runtime_options or {})
         try:
-            Draft202012Validator.check_schema(schema)
-            Draft202012Validator(schema).validate(model_info.runtime_options)
+            Draft202012Validator.check_schema(manifest["json_schema"])
+            Draft202012Validator(manifest["json_schema"]).validate(runtime_options)
         except (SchemaError, ValidationError) as e:
             raise ServiceException(ChatErrorCode.MODEL_RUNTIME_OPTIONS_INVALID, custom_msg=str(e))
+        model_info = model_info.with_runtime_options(runtime_options)
 
         # 进入多轮循环
         for iteration in range(agent_max_iterations or settings.AGENT_MAX_ITERATIONS):

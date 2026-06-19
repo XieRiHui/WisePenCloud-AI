@@ -43,6 +43,7 @@ class QwenAdapter(LLMProvider):
             },
             "defaults": {
                 "temperature": 0.7,
+                "enable_thinking": True,
             },
         }
 

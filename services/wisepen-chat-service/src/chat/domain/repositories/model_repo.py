@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, List, Optional
 
 from beanie import PydanticObjectId
@@ -72,6 +72,9 @@ class ModelRequestInfo:
     @property
     def max_output_tokens(self) -> Optional[int]:
         return self.model.max_output_tokens
+
+    def with_runtime_options(self, runtime_options: dict[str, Any]) -> "ModelRequestInfo":
+        return replace(self, runtime_options=runtime_options)
 
 class ModelRepository(ABC):
 
