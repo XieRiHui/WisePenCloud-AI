@@ -1,7 +1,5 @@
 import uuid
 from typing import Any, AsyncGenerator, Dict, List, Optional
-from jsonschema import Draft202012Validator
-
 from anthropic import AsyncAnthropic
 
 from chat.core.config.app_settings import settings
@@ -36,16 +34,15 @@ class AnthropicAdapter(LLMProvider):
                     "thinking": {
                         "type": "object",
                         "additionalProperties": False,
+                        "required": ["type", "budget_tokens"],
                         "properties": {
-                            "type": {"type": "string", "enum": ["enabled", "disabled"]},
+                            "type": {"type": "string", "enum": ["enabled"]},
                             "budget_tokens": {"type": "integer", "minimum": 1024},
                         },
                     },
                 },
             },
-            "defaults": {
-                "thinking": {"type": "enabled"},
-            },
+            "defaults": {},
         }
 
     async def stream_chat_completion(

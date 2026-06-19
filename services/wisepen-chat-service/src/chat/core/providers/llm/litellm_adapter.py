@@ -124,7 +124,7 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
         except litellm.ContextWindowExceededError:
             raise ServiceException(ChatErrorCode.CONTEXT_LIMIT_EXCEEDED)
         except Exception as e:
-            raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=f"Provider Error: {e}")
+            raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=str(e))
 
     async def stream_chat_completion(
             self,
@@ -188,13 +188,10 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
                             if tool_call_delta.function.arguments: # 累加 arguments
                                 acc["arguments"] += tool_call_delta.function.arguments
 
-                if token_usage: # 传递 LLMStreamEvent USAGE
-                    yield LLMStreamEvent(type=LLMEventType.USAGE, usage=LLMUsage(output_tokens=int(token_usage)))
-
         except litellm.ContextWindowExceededError:
             raise ServiceException(ChatErrorCode.CONTEXT_LIMIT_EXCEEDED)
         except Exception as e:
-            raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=f"Provider Error: {e}")
+            raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=str(e))
 
         # 计费
         if token_usage:  # 传递 LLMStreamEvent USAGE

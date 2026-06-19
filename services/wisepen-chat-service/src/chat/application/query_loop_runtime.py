@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import AsyncIterator, Iterator, List, Optional, Union
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, SchemaError, ValidationError
 
 from chat.application.events import (
     ReasoningDeltaEvent,
@@ -143,8 +143,11 @@ class QueryLoopRuntime:
 
         # 检查模型参数是否正确
         schema = llm_provider.runtime_options_manifest()["json_schema"]
-        Draft202012Validator.check_schema(schema)
-        Draft202012Validator(schema).validate(model_info.runtime_options)
+        try:
+            Draft202012Validator.check_schema(schema)
+            Draft202012Validator(schema).validate(model_info.runtime_options)
+        except (SchemaError, ValidationError) as e:
+            raise ServiceException(ChatErrorCode.MODEL_RUNTIME_OPTIONS_INVALID, custom_msg=str(e))
 
         # 进入多轮循环
         for iteration in range(agent_max_iterations or settings.AGENT_MAX_ITERATIONS):

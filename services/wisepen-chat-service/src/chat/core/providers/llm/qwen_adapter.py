@@ -107,9 +107,9 @@ class QwenAdapter(LLMProvider):
                 for call in read_provider_value(message, "tool_calls", []) or []:
                     payload = call if isinstance(call, dict) else {}
 
-                    # 直接处理并积累 tool_use 块
+                    # 保存完整 tool_call 原生块
                     function = payload.get("function", {})
-                    tool_call_payloads.append(function)
+                    tool_call_payloads.append(payload)
                     tool_calls.append(ToolCallMessage(
                         call_id=payload.get("id") or f"call_{uuid.uuid4().hex}",
                         name=function.get("name", ""),

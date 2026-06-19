@@ -19,6 +19,7 @@ dependencies = [
     "anthropic",
     "google-genai",
     "dashscope",
+    "jsonschema",
     "beanie",
     "redis[asyncio]",
     "nacos-sdk-python",
