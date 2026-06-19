@@ -5,7 +5,8 @@ from typing import Any, List, Optional
 from beanie import PydanticObjectId
 
 from chat.domain.entities.model import Model, ModelScope, ModelProviderMapping
-from chat.domain.entities.provider import Provider
+from chat.domain.entities.provider import Provider, ProviderType
+
 
 @dataclass(frozen=True)
 class ModelInfo:
@@ -22,6 +23,7 @@ class ModelRequestInfo:
     model: Model
     mapping: ModelProviderMapping
     provider: Provider
+    runtime_options: dict
 
     @property
     def model_id(self) -> PydanticObjectId:
@@ -36,12 +38,20 @@ class ModelRequestInfo:
         return self.mapping.provider_model_name
 
     @property
-    def api_base_url(self) -> str:
-        return self.provider.api_base_url
+    def base_url(self) -> Optional[str]:
+        return self.provider.base_url
+
+    @property
+    def provider_type(self) -> ProviderType:
+        return self.provider.type
 
     @property
     def api_key(self) -> str:
         return self.provider.api_key
+
+    @property
+    def runtime_options(self) -> dict:
+        return self.runtime_options
 
     @property
     def scope(self) -> ModelScope:
@@ -129,5 +139,6 @@ class ModelRepository(ABC):
             user_id: Optional[str] = None,
             provider_id: Optional[PydanticObjectId] = None,
             scope = None,
+            runtime_options: dict = None,
     ) -> ModelRequestInfo:
         pass

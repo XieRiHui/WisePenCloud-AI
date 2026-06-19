@@ -35,13 +35,14 @@ def to_provider_response(provider: Provider) -> ProviderResponse:
     return ProviderResponse(
         id=str(provider.id) if provider.id else "",
         name=provider.name,
-        api_base_url=provider.api_base_url,
+        base_url=provider.base_url,
         api_key_fingerprint=provider.api_key_fingerprint,
+        support_runtime_options={},
         scope=provider.scope,
         type=provider.type,
         is_active=provider.is_active,
-        usage_tokens=provider.usage_tokens,
-        billable_usage_tokens=provider.billable_usage_tokens,
+        token_usage=provider.token_usage,
+        billable_token_usage=provider.billable_token_usage,
     )
 
 
@@ -50,12 +51,13 @@ def to_mapping_response(
     providers: Dict[str, Provider] = None,
 ) -> ModelProviderMappingResponse:
     providers = providers or {}
-    provider = providers.get(str(mapping.provider_id), None)
+    provider:Provider = providers.get(str(mapping.provider_id), None)
     return ModelProviderMappingResponse(
         model_id=str(mapping.model_id),
         provider_id=str(mapping.provider_id),
         provider_name=provider.name if provider is not None else None,
         provider_model_name=mapping.provider_model_name,
+        support_runtime_options={},
         is_preferred=mapping.is_preferred,
         is_active=mapping.is_active,
         priority=mapping.priority,
@@ -70,6 +72,7 @@ def to_model_response(
         display_name=model.display_name,
         vendor=model.vendor,
         type=model.type,
+        model_family=model.model_family,
         billing_ratio=model.billing_ratio,
         support_thinking=model.support_thinking,
         support_vision=model.support_vision,
@@ -146,9 +149,11 @@ async def create_user_provider(
     await provider_repo.create_provider(
         Provider(
             name=req.name,
-            api_base_url=req.api_base_url,
+            base_url=req.base_url,
             api_key=req.api_key,
             type=req.type,
+            options=req.options,
+            is_active=req.is_active,
         )
     , user_id)
     return R.success()
@@ -224,6 +229,7 @@ async def create_user_model(
             display_name=req.display_name,
             vendor=req.vendor,
             type=req.type,
+            model_family=req.model_family,
             billing_ratio=req.billing_ratio,
             support_thinking=req.support_thinking,
             support_vision=req.support_vision,

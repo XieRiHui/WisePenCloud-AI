@@ -1,21 +1,22 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from chat.domain.entities.model import ModelScope, ModelType
+from chat.domain.entities.model import ModelFamily, ModelScope, ModelType
 from chat.domain.entities.provider import ProviderScope, ProviderType
 
 
 class ProviderResponse(BaseModel):
     id: str
     name: str
-    api_base_url: str
+    base_url: Optional[str] = None
     api_key_fingerprint: Optional[str] = None
     scope: ProviderScope
     type: ProviderType
+    support_runtime_options: Dict = Field(default_factory=dict)
     is_active: bool
-    usage_tokens: int
-    billable_usage_tokens: int
+    token_usage: int
+    billable_token_usage: int
 
 
 class ModelProviderMappingResponse(BaseModel):
@@ -23,6 +24,7 @@ class ModelProviderMappingResponse(BaseModel):
     provider_id: str
     provider_name: Optional[str] = None
     provider_model_name: str
+    support_runtime_options: Dict = Field(default_factory=dict)
     is_preferred: bool
     is_active: bool
     priority: int
@@ -34,6 +36,7 @@ class ModelResponse(BaseModel):
     display_name: str
     vendor: str
     type: ModelType
+    model_family: ModelFamily
     billing_ratio: int
     support_thinking: bool
     support_vision: bool
@@ -60,15 +63,16 @@ class ListUserProvidersResponse(BaseModel):
 
 class CreateUserProviderRequest(BaseModel):
     name: str
-    api_base_url: str
+    type: ProviderType
     api_key: str
-    type: ProviderType = ProviderType.OPENAI_COMPATIBLE_LLM
+    base_url: Optional[str] = None
+    is_active: bool = True
 
 
 class UpdateUserProviderRequest(BaseModel):
     provider_id: str
     name: Optional[str] = None
-    api_base_url: Optional[str] = None
+    base_url: Optional[str] = None
     api_key: Optional[str] = None
     type: Optional[ProviderType] = None
     is_active: Optional[bool] = None
@@ -81,6 +85,7 @@ class CreateUserModelRequest(BaseModel):
     display_name: str
     vendor: str
     type: ModelType = ModelType.CUSTOM_MODEL
+    model_family: ModelFamily = ModelFamily.GENERIC
     billing_ratio: int = 1
     support_thinking: bool = False
     support_vision: bool = False
@@ -95,6 +100,7 @@ class UpdateUserModelRequest(BaseModel):
     display_name: Optional[str] = None
     vendor: Optional[str] = None
     type: Optional[ModelType] = None
+    model_family: Optional[ModelFamily] = None
     billing_ratio: Optional[int] = None
     support_thinking: Optional[bool] = None
     support_vision: Optional[bool] = None
