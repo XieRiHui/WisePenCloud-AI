@@ -7,7 +7,8 @@ from chat.domain.entities import ChatMessage, Role
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
-from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMToolCall, LLMUsage
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 
@@ -96,12 +97,12 @@ class OpenAIAdapter(LLMProvider):
             raise ServiceException(ChatErrorCode.LLM_GENERATION_FAILED, custom_msg=f"OpenAI Responses Error: {e}")
 
         # 解析工具调用
-        calls: list[LLMToolCall] = []
+        calls: list[ToolCallMessage] = []
         for item in output_items:
             # 仅处理 function_call item
             if item.get("type") != "function_call":
                 continue
-            calls.append(LLMToolCall(
+            calls.append(ToolCallMessage(
                 call_id=item.get("call_id") or item.get("id") or f"call_{uuid.uuid4().hex}",
                 name=item.get("name") or "",
                 arguments=json_object(item.get("arguments") or "{}")
@@ -110,7 +111,7 @@ class OpenAIAdapter(LLMProvider):
             yield LLMStreamEvent(type=LLMEventType.TOOL_CALLS, tool_calls=calls)
 
         # 保存 Responses 原生 output items 与 response_id，供下一轮协议回放
-        yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={"output": output_items, "response_id", response_id})
+        yield LLMStreamEvent(type=LLMEventType.STATE, provider_payload={"output": output_items, "response_id": response_id})
 
     @staticmethod
     def _openai_messages_formatter(messages: List[ChatMessage]) -> tuple[list[Any], str, str | None]:
@@ -143,7 +144,7 @@ class OpenAIAdapter(LLMProvider):
             if msg.role == Role.SYSTEM:
                 continue
             # 如果当前消息是 OpenAI Responses 提供的，且存在 provider_payload，则直接取出
-            if msg.role == Role.ASSISTANT and msg.model_request.provider_type == ProviderType.OPENAI and msg.provider_payload:
+            if msg.role == Role.ASSISTANT and msg.model_info.provider_type == ProviderType.OPENAI and msg.provider_payload:
                 items.extend(msg.provider_payload["output"])
                 continue
             if msg.role == Role.TOOL:

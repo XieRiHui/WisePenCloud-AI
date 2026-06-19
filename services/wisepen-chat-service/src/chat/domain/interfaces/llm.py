@@ -1,12 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, AsyncGenerator, List, Dict, Optional, Any
+from typing import AsyncGenerator, List, Dict, Optional, Any
 from chat.domain.entities import ChatMessage
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.entities.provider import ProviderType
-
-if TYPE_CHECKING:
-    from chat.domain.repositories.model_repo import ModelRequestInfo
+from chat.domain.repositories.model_repo import ModelRequestInfo
 
 @dataclass
 class LLMUsage:
@@ -23,12 +22,6 @@ class LLMCompletionResult:
     token_usage: int
     raw: Any = None
 
-@dataclass
-class LLMToolCall:
-    call_id: str
-    name: str
-    arguments: dict[str, Any]
-
 class LLMEventType(str, Enum):
     TEXT_DELTA = "TEXT_DELTA"
     REASONING_DELTA = "REASONING_DELTA"
@@ -40,7 +33,7 @@ class LLMEventType(str, Enum):
 class LLMStreamEvent:
     type: LLMEventType
     delta: str | None = None
-    tool_calls: list[LLMToolCall] | None = None
+    tool_calls: list[ToolCallMessage] | None = None
     usage: LLMUsage | None = None
     provider_payload: dict[str, Any] | None = None
     response_id: str | None = None
@@ -51,14 +44,14 @@ class LLMProvider(ABC):
     def provider_type(self) -> ProviderType:
         pass
 
-    def supports_tools(self, model_request: "ModelRequestInfo") -> bool:
+    def supports_tools(self) -> bool:
         return True
 
     @abstractmethod
     async def stream_chat_completion(
             self,
             messages: List[ChatMessage],
-            model_request: "ModelRequestInfo",
+            model_request: ModelRequestInfo,
             tools: Optional[List[Dict[str, Any]]] = None,
     ) -> AsyncGenerator[LLMStreamEvent, None]:
         yield  # type: ignore[misc]

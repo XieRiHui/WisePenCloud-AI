@@ -26,7 +26,8 @@ from chat.core.config.app_settings import settings
 from chat.domain.entities import ChatMessage, Role
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
-from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMToolCall
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 from common.logger import warn
@@ -49,7 +50,7 @@ class _StepEventInterpreter:
         # 内部字段 assistant reasoning，用于积累模型思考，以供 LLMProvider 的原生载荷不适用时降级使用
         self.assistant_reasoning: str = ""
         # 工具调用列表
-        self.tool_calls: list[LLMToolCall] = []
+        self.tool_calls: list[ToolCallMessage] = []
         # LLMProvider 的原生载荷
         self.provider_payload: dict | None = None
 

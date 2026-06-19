@@ -124,8 +124,6 @@ class MongoModelRepository(ModelRepository):
             model.support_vision = updates["support_vision"]
         if "support_tools" in updates:
             model.support_tools = updates["support_tools"]
-        if "support_streaming" in updates:
-            model.support_streaming = updates["support_streaming"]
         if "context_window_tokens" in updates:
             model.context_window_tokens = updates["context_window_tokens"]
         if "max_output_tokens" in updates:

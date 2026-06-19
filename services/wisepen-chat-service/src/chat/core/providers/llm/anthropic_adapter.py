@@ -8,7 +8,8 @@ from chat.domain.entities import ChatMessage, Role
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
-from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMToolCall, LLMUsage
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 
@@ -101,7 +102,7 @@ class AnthropicAdapter(LLMProvider):
         calls = []
         for block in content_blocks:
             if block.get("type") != "tool_use": continue # 仅处理 tool_use 块
-            calls.append(LLMToolCall(
+            calls.append(ToolCallMessage(
                 call_id=block.get("id") or f"call_{uuid.uuid4().hex}",
                 name=block.get("name") or "",
                 arguments=block.get("input") if isinstance(block.get("input"), dict) else {},
@@ -128,7 +129,7 @@ class AnthropicAdapter(LLMProvider):
                 })
                 continue
             # 如果当前消息是 ANTHROPIC 提供的，且存在 provider_payload，则直接取出
-            if msg.role == Role.ASSISTANT and msg.model_request.provider_type == ProviderType.ANTHROPIC and msg.provider_payload:
+            if msg.role == Role.ASSISTANT and msg.model_info.provider_type == ProviderType.ANTHROPIC and msg.provider_payload:
                 anthropic_messages.append({
                     "role": "assistant",
                     "content": msg.provider_payload["content"],

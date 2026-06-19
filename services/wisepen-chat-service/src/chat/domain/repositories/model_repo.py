@@ -50,10 +50,6 @@ class ModelRequestInfo:
         return self.provider.api_key
 
     @property
-    def runtime_options(self) -> dict:
-        return self.runtime_options
-
-    @property
     def scope(self) -> ModelScope:
         return self.model.scope
 
@@ -72,10 +68,6 @@ class ModelRequestInfo:
     @property
     def support_tools(self) -> bool:
         return self.model.support_tools
-
-    @property
-    def support_streaming(self) -> bool:
-        return self.model.support_streaming
 
     @property
     def context_window_tokens(self) -> Optional[int]:

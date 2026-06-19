@@ -8,7 +8,8 @@ from chat.domain.entities import ChatMessage, Role
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
-from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMToolCall, LLMUsage
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 
@@ -92,14 +93,14 @@ class GeminiAdapter(LLMProvider):
             yield LLMStreamEvent(type=LLMEventType.USAGE, usage=LLMUsage(output_tokens=token_usage))
 
         # 解析工具调用
-        calls: list[LLMToolCall] = []
+        calls: list[ToolCallMessage] = []
         for part in accumulated_parts:
             function_call = read_provider_value(part, "function_call")
             # 仅处理 function_call part
             if function_call:
                 name = read_provider_value(function_call, "name", "")
                 args = read_provider_value(function_call, "args", {}) or {}
-                calls.append(LLMToolCall(
+                calls.append(ToolCallMessage(
                     call_id=read_provider_value(function_call, "id") or f"call_{uuid.uuid4().hex}",
                     name=name,
                     arguments=args if isinstance(args, dict) else {}
@@ -118,7 +119,7 @@ class GeminiAdapter(LLMProvider):
                 contents.append({"role": "user", "parts": [{"text": msg.content or ""}]})
                 continue
             # 如果当前消息是 GEMINI 提供的，且存在 provider_payload，则直接取出
-            if msg.role == Role.ASSISTANT and msg.model_request.provider_type == ProviderType.GEMINI and msg.provider_payload:
+            if msg.role == Role.ASSISTANT and msg.model_info.provider_type == ProviderType.GEMINI and msg.provider_payload:
                 contents.append({
                     "role": "model",
                     "parts": msg.provider_payload["content"]

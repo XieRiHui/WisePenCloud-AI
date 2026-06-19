@@ -13,10 +13,10 @@ from chat.domain.interfaces.llm import (
     LLMCompletionResult,
     LLMEventType,
     LLMStreamEvent,
-    LLMToolCall,
     LLMUsage,
     TextCompletionProvider,
 )
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 
@@ -185,7 +185,7 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
             yield LLMStreamEvent(type=LLMEventType.USAGE, usage=LLMUsage(output_tokens=int(token_usage)))
 
         # 解析工具调用
-        tool_calls: list[LLMToolCall] = []
+        tool_calls: list[ToolCallMessage] = []
         tool_call_payloads = []
         for idx in sorted(tool_acc.keys()):
             acc = tool_acc[idx]
@@ -194,7 +194,7 @@ class LiteLLMAdapter(LLMProvider, TextCompletionProvider):
                 "type": "function",
                 "function": {"name": acc["name"], "arguments": acc["arguments"]},
             })
-            tool_calls.append(LLMToolCall(
+            tool_calls.append(ToolCallMessage(
                 call_id=acc["id"] or f"call_{uuid.uuid4().hex}",
                 name=acc["name"],
                 arguments=json_object(acc["arguments"])

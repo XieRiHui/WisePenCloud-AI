@@ -41,7 +41,6 @@ class ModelResponse(BaseModel):
     support_thinking: bool
     support_vision: bool
     support_tools: bool
-    support_streaming: bool
     context_window_tokens: Optional[int] = None
     max_output_tokens: Optional[int] = None
     is_active: bool
@@ -90,7 +89,6 @@ class CreateUserModelRequest(BaseModel):
     support_thinking: bool = False
     support_vision: bool = False
     support_tools: bool = True
-    support_streaming: bool = True
     context_window_tokens: Optional[int] = None
     max_output_tokens: Optional[int] = None
 
@@ -105,7 +103,6 @@ class UpdateUserModelRequest(BaseModel):
     support_thinking: Optional[bool] = None
     support_vision: Optional[bool] = None
     support_tools: Optional[bool] = None
-    support_streaming: Optional[bool] = None
     context_window_tokens: Optional[int] = None
     max_output_tokens: Optional[int] = None
     is_active: Optional[bool] = None

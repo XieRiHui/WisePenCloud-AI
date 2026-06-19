@@ -43,7 +43,6 @@ class Model(Document):
     support_thinking: bool = Field(default=False, description="是否支持深度思考")
     support_vision: bool = Field(default=False, description="是否支持视觉输入")
     support_tools: bool = Field(default=True, description="是否支持 tool calling")
-    support_streaming: bool = Field(default=True, description="是否支持流式输出")
 
     context_window_tokens: Optional[int] = Field(default=None, description="上下文窗口 token 上限")
     max_output_tokens: Optional[int] = Field(default=None, description="最大输出 token 数")

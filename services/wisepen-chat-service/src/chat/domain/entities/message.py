@@ -2,11 +2,10 @@ from enum import Enum
 import jieba
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
-from beanie import Document, PydanticObjectId
-from pydantic import Field, ConfigDict
+from beanie import Document
+from pydantic import Field, BaseModel
 from pymongo import IndexModel, ASCENDING
 
-from chat.domain.interfaces.llm import LLMToolCall
 from chat.domain.repositories.model_repo import ModelRequestInfo
 
 
@@ -15,6 +14,12 @@ class Role(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"
+
+
+class ToolCallMessage(BaseModel):
+    call_id: str
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatMessage(Document):
@@ -36,7 +41,7 @@ class ChatMessage(Document):
 
     # 仅 assistant 消息必填
     reasoning_content: Optional[str] = None  # 大模型的推理/思考内容
-    tool_calls: Optional[List[LLMToolCall]] = None
+    tool_calls: Optional[List[ToolCallMessage]] = None
     token_usage: int = 0
 
     content: Optional[str] = None   # 返回内容

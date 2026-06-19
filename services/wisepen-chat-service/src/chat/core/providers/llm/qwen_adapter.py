@@ -7,7 +7,8 @@ from chat.domain.entities import ChatMessage, Role
 from chat.domain.entities.provider import ProviderType
 from chat.domain.error_codes import ChatErrorCode
 from chat.domain.interfaces import LLMProvider
-from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMToolCall, LLMUsage
+from chat.domain.interfaces.llm import LLMEventType, LLMStreamEvent, LLMUsage
+from chat.domain.entities.message import ToolCallMessage
 from chat.domain.repositories.model_repo import ModelRequestInfo
 from common.core.exceptions import ServiceException
 
@@ -52,7 +53,7 @@ class QwenAdapter(LLMProvider):
 
         assistant_text = ""
         reasoning_text = ""
-        tool_calls: list[LLMToolCall] = []
+        tool_calls: list[ToolCallMessage] = []
         tool_call_payloads = []
         token_usage = 0
         try:
@@ -93,7 +94,7 @@ class QwenAdapter(LLMProvider):
                     # 直接处理并积累 tool_use 块
                     function = payload.get("function", {})
                     tool_call_payloads.append(function)
-                    tool_calls.append(LLMToolCall(
+                    tool_calls.append(ToolCallMessage(
                         call_id=payload.get("id") or f"call_{uuid.uuid4().hex}",
                         name=function.get("name", ""),
                         arguments=json_object(function.get("arguments", "{}")),
@@ -126,7 +127,7 @@ class QwenAdapter(LLMProvider):
         result = []
         for msg in messages:
             # 只回放 Qwen 自己保存的 assistant 原生消息，其他 provider payload 只能降级为可见文本
-            if msg.role == Role.ASSISTANT and msg.model_request.provider_type == ProviderType.QWEN and msg.provider_payload:
+            if msg.role == Role.ASSISTANT and msg.model_info.provider_type == ProviderType.QWEN and msg.provider_payload:
                 result.append(msg.provider_payload["message"])
                 continue
             if msg.role == Role.TOOL:

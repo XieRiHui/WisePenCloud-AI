@@ -77,7 +77,6 @@ def to_model_response(
         support_thinking=model.support_thinking,
         support_vision=model.support_vision,
         support_tools=model.support_tools,
-        support_streaming=model.support_streaming,
         context_window_tokens=model.context_window_tokens,
         max_output_tokens=model.max_output_tokens,
         is_active=model.is_active,
@@ -234,7 +233,6 @@ async def create_user_model(
             support_thinking=req.support_thinking,
             support_vision=req.support_vision,
             support_tools=req.support_tools,
-            support_streaming=req.support_streaming,
             context_window_tokens=req.context_window_tokens,
             max_output_tokens=req.max_output_tokens,
         )
