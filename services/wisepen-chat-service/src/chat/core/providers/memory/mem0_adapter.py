@@ -128,7 +128,7 @@ class Mem0Adapter(MemoryProvider):
             owner_id = memory.get("user_id")
             if owner_id != user_id:
                 raise ServiceException(ChatErrorCode.MEMORY_NOT_FOUND)
-            self.client.delete_session(memory_id, )
+            self.client.delete(memory_id)
 
         await asyncio.to_thread(_sync_verify_and_delete)
 

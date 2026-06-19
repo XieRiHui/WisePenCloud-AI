@@ -174,7 +174,6 @@ class MongoModelRepository(ModelRepository):
         )
         if provider is None:
             raise ServiceException(ChatErrorCode.PROVIDER_NOT_FOUND)
-        self._ensure_llm_provider_matches_model(model, provider)
 
         mapping = await ModelProviderMapping.find_one(
             ModelProviderMapping.model_id == model_id,
