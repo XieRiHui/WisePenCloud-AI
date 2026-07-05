@@ -17,7 +17,7 @@ class AppSettings(BaseModel):
     extra=forbid 校验, 预防字段错误
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict()
 
     # LLM 默认网关配置（作为 fallback，主对话链路从 Provider 表动态获取）
     LLM_BASE_URL: str
