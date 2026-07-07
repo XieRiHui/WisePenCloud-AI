@@ -16,6 +16,7 @@ from chat.application.tools.core import (
 )
 from chat.application.tools.skill_tools.common import AllowedSkillIdCheck, build_skill_asset_output_placeholder, \
     SkillPermissionCheck
+from chat.application.tools.skill_tools.utils.builtin_skills import get_builtin_skill, is_builtin_skill_id, read_builtin_skill_asset
 from chat.domain.interfaces.file_loader import FileLoader
 
 
@@ -33,7 +34,10 @@ class ValidSkillAssetPathCheck(ToolPreflightHook):
         skill_id: str = invocation.tool_call_arguments.get("skill_id")
         path: str = invocation.tool_call_arguments.get("path")
 
-        skill = await self._ai_asset_client.get_published_skill(skill_id)
+        if is_builtin_skill_id(skill_id):
+            skill = get_builtin_skill(skill_id)
+        else:
+            skill = await self._ai_asset_client.get_published_skill(skill_id)
         if skill is None:
             return ToolPreflightResult(ok=False,
                                        message=f"Skill '{skill_id}' not found.")
@@ -111,16 +115,28 @@ class LoadSkillAssetTool:
         skill_id = (kwargs.get("skill_id") or "").strip()
         path = (kwargs.get("path") or "").strip()
 
-        object_key = context["skill_asset_object_key"]
-        try:
-            raw = await self._file_loader.load_by_object_key(object_key)
-        except Exception as e:
-            raise ToolExecutionError(
-                reason="Skill Asset Load Failed",
-                detail_reason=f"Failed to load skill asset: {type(e).__name__}",
-                retryable=True,
-                metadata={"skill_id": skill_id, "path": path, "object_key": object_key, "detail": str(e)},
-            )
+        if is_builtin_skill_id(skill_id):
+            # 内置 Skill 使用 read_builtin_skill_asset 加载
+            try:
+                raw = read_builtin_skill_asset(skill_id, path)
+            except Exception as e:
+                raise ToolExecutionError(
+                    reason="Skill Asset Load Failed",
+                    detail_reason=f"Failed to load builtin skill asset: {type(e).__name__}",
+                    retryable=False,
+                    metadata={"skill_id": skill_id, "path": path, "detail": str(e)},
+                )
+        else:
+            object_key = context["skill_asset_object_key"]
+            try:
+                raw = await self._file_loader.load_by_object_key(object_key)
+            except Exception as e:
+                raise ToolExecutionError(
+                    reason="Skill Asset Load Failed",
+                    detail_reason=f"Failed to load skill asset: {type(e).__name__}",
+                    retryable=True,
+                    metadata={"skill_id": skill_id, "path": path, "object_key": object_key, "detail": str(e)},
+                )
 
         # Loader 返回 bytes：资产可能是文本（.md / .py / .json）也可能是二进制（.png / .pdf / .wasm ...）
         # 在给 LLM 的边界上做 UTF-8 严格解码，拒绝不可文本化的二进制资产
