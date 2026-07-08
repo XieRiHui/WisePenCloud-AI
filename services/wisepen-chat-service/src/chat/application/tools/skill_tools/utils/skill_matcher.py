@@ -9,6 +9,9 @@ from chat.service_client import AIAssetClient
 from chat.application.tools.skill_tools.utils.builtin_skills import get_builtin_skill_meta, is_builtin_skill_id
 
 
+ALWAYS_AVAILABLE_BUILTIN_SKILL_IDS = {"builtin:skill-creator"}
+
+
 class SkillMatcher(ABC):
     """
     Skill 筛选器，返回当前请求可展示给 LLM 的 Skill 元信息
@@ -37,8 +40,8 @@ class DefaultSkillMatcher(SkillMatcher):
             user_query: str,
             skill_match_top_k: Optional[int] = None
     ) -> List[SkillMeta]:
-        if not on_demand_skill_ids:
-            return []
+        # 系统级内置 Skill 始终进入候选集，不受前端 on-demand 覆盖影响
+        on_demand_skill_ids = set(on_demand_skill_ids or set()) | ALWAYS_AVAILABLE_BUILTIN_SKILL_IDS
 
         builtin_skill_ids = {skill_id for skill_id in on_demand_skill_ids if is_builtin_skill_id(skill_id)}
         external_skill_ids = on_demand_skill_ids - builtin_skill_ids
