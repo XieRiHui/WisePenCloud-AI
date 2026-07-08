@@ -30,8 +30,12 @@ from chat.application.agents import (
     DefaultAgentResolver,
 )
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
+from chat.application.tools.skill_tools import CreateSkillInfoTool
+from chat.application.tools.skill_tools import GetSkillInfoTool
 from chat.application.tools.skill_tools import LoadSkillAssetTool
 from chat.application.tools.skill_tools import LoadSkillTool
+from chat.application.tools.skill_tools import UpdateSkillInfoTool
+from chat.application.tools.skill_tools import UploadSkillDraftAssetTool
 from chat.application.tools.core import ToolRegistry
 from chat.application.tools.session_tools.get_historical_chat_messages_tool import GetHistoricalChatMessagesTool
 from chat.core.config.nacos import nacos_client_manager
@@ -148,11 +152,31 @@ class Container(containers.DeclarativeContainer):
         resource_client=resource_client,
         file_loader=oss_file_loader,
     )
+    create_skill_info_tool = providers.Singleton(
+        CreateSkillInfoTool,
+        ai_asset_client=ai_asset_client,
+    )
+    get_skill_info_tool = providers.Singleton(
+        GetSkillInfoTool,
+        ai_asset_client=ai_asset_client,
+    )
+    update_skill_info_tool = providers.Singleton(
+        UpdateSkillInfoTool,
+        ai_asset_client=ai_asset_client,
+    )
+    upload_skill_draft_asset_tool = providers.Singleton(
+        UploadSkillDraftAssetTool,
+        ai_asset_client=ai_asset_client,
+    )
 
     tool_providers = providers.List(
         search_history_tool,
         load_skill_tool,
         load_skill_asset_tool,
+        create_skill_info_tool,
+        get_skill_info_tool,
+        update_skill_info_tool,
+        upload_skill_draft_asset_tool,
     )
 
     tool_registry = providers.Singleton(

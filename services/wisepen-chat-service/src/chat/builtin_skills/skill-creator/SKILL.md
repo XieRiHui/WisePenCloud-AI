@@ -1,8 +1,6 @@
 ---
 name: skill-creator
-description: Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Codex's capabilities with specialized knowledge, workflows, or tool integrations.
-metadata:
-  short-description: Create or update a skill
+description: Guide for creating or updating Wisepen AIAsset Skills that extend Wisepen with specialized knowledge, workflows, bundled text references, or script assets. Use when users want to design a new Skill, revise an existing Skill, or save Skill content as a Wisepen draft.
 ---
 
 # Skill Creator
@@ -11,9 +9,9 @@ This skill provides guidance for creating effective skills.
 
 ## About Skills
 
-Skills are modular, self-contained folders that extend Codex's capabilities by providing
+Skills are modular, self-contained folders that extend Wisepen's capabilities by providing
 specialized knowledge, workflows, and tools. Think of them as "onboarding guides" for specific
-domains or tasks—they transform Codex from a general-purpose agent into a specialized agent
+domains or tasks—they transform Wisepen from a general-purpose agent into a specialized agent
 equipped with procedural knowledge that no model can fully possess.
 
 ### What Skills Provide
@@ -27,9 +25,9 @@ equipped with procedural knowledge that no model can fully possess.
 
 ### Concise is Key
 
-The context window is a public good. Skills share the context window with everything else Codex needs: system prompt, conversation history, other Skills' metadata, and the actual user request.
+The context window is a public good. Skills share the context window with everything else Wisepen needs: system prompt, conversation history, other Skills' metadata, and the actual user request.
 
-**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have. Challenge each piece of information: "Does Codex really need this explanation?" and "Does this paragraph justify its token cost?"
+**Default assumption: Wisepen is already very smart.** Only add context Wisepen doesn't already have. Challenge each piece of information: "Does Wisepen really need this explanation?" and "Does this paragraph justify its token cost?"
 
 Prefer concise examples over verbose explanations.
 
@@ -43,15 +41,13 @@ Match the level of specificity to the task's fragility and variability:
 
 **Low freedom (specific scripts, few parameters)**: Use when operations are fragile and error-prone, consistency is critical, or a specific sequence must be followed.
 
-Think of Codex as exploring a path: a narrow bridge with cliffs needs specific guardrails (low freedom), while an open field allows many routes (high freedom).
+Think of Wisepen as exploring a path: a narrow bridge with cliffs needs specific guardrails (low freedom), while an open field allows many routes (high freedom).
 
 ### Protect Validation Integrity
 
-You may use subagents during iteration to validate whether a skill works on realistic tasks or whether a suspected problem is real. This is most useful when you want an independent pass on the skill's behavior, outputs, or failure modes after a revision.  Only do this when it is possible to start new subagents.
+During iteration, validate whether a skill works on realistic tasks or whether a suspected problem is real. Treat validation as an evaluation surface: the goal is to learn whether the skill generalizes, not whether the answer can be reconstructed from leaked context.
 
-When using subagents for validation, treat that as an evaluation surface. The goal is to learn whether the skill generalizes, not whether another agent can reconstruct the answer from leaked context.
-
-Prefer raw artifacts such as example prompts, outputs, diffs, logs, or traces. Give the minimum task-local context needed to perform the validation. Avoid passing the intended answer, suspected bug, intended fix, or your prior conclusions unless the validation explicitly requires them.
+Prefer raw artifacts such as example prompts, outputs, diffs, logs, or traces. Give the minimum task-local context needed to perform the validation. Avoid passing the intended answer, suspected bug, intended fix, or prior conclusions unless the validation explicitly requires them.
 
 ### Anatomy of a Skill
 
@@ -64,8 +60,6 @@ skill-name/
 │   │   ├── name: (required)
 │   │   └── description: (required)
 │   └── Markdown instructions (required)
-├── agents/ (recommended)
-│   └── openai.yaml - UI metadata for skill lists and chips
 └── Bundled Resources (optional)
     ├── scripts/          - Executable code (Python/Bash/etc.)
     ├── references/       - Documentation intended to be loaded into context as needed
@@ -76,18 +70,17 @@ skill-name/
 
 Every SKILL.md consists of:
 
-- **Frontmatter** (YAML): Contains `name` and `description` fields. These are the only fields that Codex reads to determine when the skill gets used, thus it is very important to be clear and comprehensive in describing what the skill is, and when it should be used.
+- **Frontmatter** (YAML): Contains `name` and `description` fields. These are the only fields that Wisepen reads to determine when the skill gets used, thus it is very important to be clear and comprehensive in describing what the skill is, and when it should be used.
 - **Body** (Markdown): Instructions and guidance for using the skill. Only loaded AFTER the skill triggers (if at all).
 
-#### Agents metadata (recommended)
+#### Wisepen AIAsset Drafts
 
-- UI-facing metadata for skill lists and chips
-- Read references/openai_yaml.md before generating values and follow its descriptions and constraints
-- Create: human-facing `display_name`, `short_description`, and `default_prompt` by reading the skill
-- Generate deterministically by passing the values as `--interface key=value` to `scripts/generate_openai_yaml.py` or `scripts/init_skill.py`
-- On updates: validate `agents/openai.yaml` still matches SKILL.md; regenerate if stale
-- Only include other optional interface fields (icons, brand color) if explicitly provided
-- See references/openai_yaml.md for field definitions and examples
+Wisepen Skills are saved as AIAsset drafts through controlled tools, not by creating a local skill directory. Use `create_skill_info` for new Skills, `get_skill_info` to inspect existing Skills and obtain the current draft version, `update_skill_info` only when metadata must change, then use `upload_skill_draft_asset` once per text asset.
+
+- New Skills require a display `title`, `name`, and `description`.
+- Existing Skills require `resource_id` for inspection, and require `resource_id`, `name`, and `description` only when updating metadata.
+- Upload each changed or new text file with `path` as the directory and `name` as the file name.
+- Saving a draft never publishes the Skill. Unless a publishing tool is provided in the future, publication remains outside this workflow.
 
 #### Bundled Resources (optional)
 
@@ -98,27 +91,28 @@ Executable code (Python/Bash/etc.) for tasks that require deterministic reliabil
 - **When to include**: When the same code is being rewritten repeatedly or deterministic reliability is needed
 - **Example**: `scripts/rotate_pdf.py` for PDF rotation tasks
 - **Benefits**: Token efficient, deterministic, may be executed without loading into context
-- **Note**: Scripts may still need to be read by Codex for patching or environment-specific adjustments
+- **Note**: Scripts may still need to be read by Wisepen for patching or environment-specific adjustments
 
 ##### References (`references/`)
 
-Documentation and reference material intended to be loaded as needed into context to inform Codex's process and thinking.
+Documentation and reference material intended to be loaded as needed into context to inform Wisepen's process and thinking.
 
-- **When to include**: For documentation that Codex should reference while working
+- **When to include**: For documentation that Wisepen should reference while working
 - **Examples**: `references/finance.md` for financial schemas, `references/mnda.md` for company NDA template, `references/policies.md` for company policies, `references/api_docs.md` for API specifications
 - **Use cases**: Database schemas, API documentation, domain knowledge, company policies, detailed workflow guides
-- **Benefits**: Keeps SKILL.md lean, loaded only when Codex determines it's needed
+- **Benefits**: Keeps SKILL.md lean, loaded only when Wisepen determines it's needed
 - **Best practice**: If files are large (>10k words), include grep search patterns in SKILL.md
 - **Avoid duplication**: Information should live in either SKILL.md or references files, not both. Prefer references files for detailed information unless it's truly core to the skill—this keeps SKILL.md lean while making information discoverable without hogging the context window. Keep only essential procedural instructions and workflow guidance in SKILL.md; move detailed reference material, schemas, and examples to references files.
 
 ##### Assets (`assets/`)
 
-Files not intended to be loaded into context, but rather used within the output Codex produces.
+Files not intended to be loaded into context, but rather used within the output Wisepen produces.
 
 - **When to include**: When the skill needs files that will be used in the final output
 - **Examples**: `assets/logo.png` for brand assets, `assets/slides.pptx` for PowerPoint templates, `assets/frontend-template/` for HTML/React boilerplate, `assets/font.ttf` for typography
 - **Use cases**: Templates, images, icons, boilerplate code, fonts, sample documents that get copied or modified
-- **Benefits**: Separates output resources from documentation, enables Codex to use files without loading them into context
+- **Benefits**: Separates output resources from documentation, enables Wisepen to use files without loading them into context
+- **Current save-tool limit**: `upload_skill_draft_asset` supports text assets only. Binary assets such as images, fonts, or office templates require a separate workflow.
 
 #### What to Not Include in a Skill
 
@@ -138,7 +132,7 @@ Skills use a three-level loading system to manage context efficiently:
 
 1. **Metadata (name + description)** - Always in context (~100 words)
 2. **SKILL.md body** - When skill triggers (<5k words)
-3. **Bundled resources** - As needed by Codex (Unlimited because scripts can be executed without reading into context window)
+3. **Bundled resources** - As needed by Wisepen (Unlimited because scripts can be executed without reading into context window)
 
 #### Progressive Disclosure Patterns
 
@@ -163,7 +157,7 @@ Extract text with pdfplumber:
 - **Examples**: See [EXAMPLES.md](EXAMPLES.md) for common patterns
 ```
 
-Codex loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
+Wisepen loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
 
 **Pattern 2: Domain-specific organization**
 
@@ -179,7 +173,7 @@ bigquery-skill/
     └── marketing.md (campaigns, attribution)
 ```
 
-When a user asks about sales metrics, Codex only reads sales.md.
+When a user asks about sales metrics, Wisepen only reads sales.md.
 
 Similarly, for skills supporting multiple frameworks or variants, organize by variant:
 
@@ -192,7 +186,7 @@ cloud-deploy/
     └── azure.md (Azure deployment patterns)
 ```
 
-When the user chooses AWS, Codex only reads aws.md.
+When the user chooses AWS, Wisepen only reads aws.md.
 
 **Pattern 3: Conditional details**
 
@@ -213,12 +207,12 @@ For simple edits, modify the XML directly.
 **For OOXML details**: See [OOXML.md](OOXML.md)
 ```
 
-Codex reads REDLINING.md or OOXML.md only when the user needs those features.
+Wisepen reads REDLINING.md or OOXML.md only when the user needs those features.
 
 **Important guidelines:**
 
 - **Avoid deeply nested references** - Keep references one level deep from SKILL.md. All reference files should link directly from SKILL.md.
-- **Structure longer reference files** - For files longer than 100 lines, include a table of contents at the top so Codex can see the full scope when previewing.
+- **Structure longer reference files** - For files longer than 100 lines, include a table of contents at the top so Wisepen can see the full scope when previewing.
 
 ## Skill Creation Process
 
@@ -226,10 +220,10 @@ Skill creation involves these steps:
 
 1. Understand the skill with concrete examples
 2. Plan reusable skill contents (scripts, references, assets)
-3. Initialize the skill (run init_skill.py)
-4. Edit the skill (implement resources and write SKILL.md)
-5. Validate the skill (run quick_validate.py)
-6. Iterate based on real usage and forward-test complex skills.
+3. Create or update Wisepen Skill info
+4. Edit the skill content and upload draft assets
+5. Validate the skill with static checks and realistic examples
+6. Iterate based on real usage.
 
 Follow these steps in order, skipping only if there is a clear reason why they are not applicable.
 
@@ -239,7 +233,19 @@ Follow these steps in order, skipping only if there is a clear reason why they a
 - When generating names, generate a name under 64 characters (letters, digits, hyphens).
 - Prefer short, verb-led phrases that describe the action.
 - Namespace by tool when it improves clarity or triggering (e.g., `gh-address-comments`, `linear-address-issue`).
-- Name the skill folder exactly after the skill name.
+- Use the same slug consistently for the Skill `name` and draft metadata.
+
+### Skill Structure Patterns
+
+Choose the structure that best fits the skill's purpose. Patterns can be mixed when the skill needs more than one shape.
+
+**Workflow-Based** is best for sequential processes with clear steps. Use a structure like `Overview` -> `Workflow Decision Tree` -> `Step 1` -> `Step 2`.
+
+**Task-Based** is best for tool collections or separate operations. Use a structure like `Overview` -> `Quick Start` -> `Task Category 1` -> `Task Category 2`.
+
+**Reference/Guidelines** is best for standards, specifications, brand guidance, coding rules, or requirements. Use a structure like `Overview` -> `Guidelines` -> `Specifications` -> `Usage`.
+
+**Capabilities-Based** is best for integrated systems with multiple related features. Use a structure like `Overview` -> `Core Capabilities` -> numbered capability sections.
 
 ### Step 1: Understanding the Skill with Concrete Examples
 
@@ -253,7 +259,7 @@ For example, when building an image-editor skill, relevant questions include:
 - "Can you give some examples of how this skill would be used?"
 - "I can imagine users asking for things like 'Remove the red-eye from this image' or 'Rotate this image'. Are there other ways you imagine this skill being used?"
 - "What would a user say that should trigger this skill?"
-- "Where should I create this skill? If you do not have a preference, I will place it in `$CODEX_HOME/skills` (or `~/.codex/skills` when `CODEX_HOME` is unset) so Codex can discover it automatically."
+- "Is this a new Wisepen Skill, or should I update an existing Skill resource_id?"
 
 To avoid overwhelming users, avoid asking too many questions in a single message. Start with the most important questions and follow up as needed for better effectiveness.
 
@@ -283,61 +289,43 @@ Example: When building a `big-query` skill to handle queries like "How many user
 
 To establish the skill's contents, analyze each concrete example to create a list of the reusable resources to include: scripts, references, and assets.
 
-### Step 3: Initializing the Skill
+### Step 3: Create, Read, or Update Wisepen Skill Info
 
-At this point, it is time to actually create the skill.
+At this point, create a new Wisepen Skill info record, inspect an existing one, or update existing metadata only when it actually changed.
 
-Skip this step only if the skill being developed already exists. In this case, continue to the next step.
+Skip this step only when the current turn is purely planning and the user has not asked to save a draft.
 
-Before running `init_skill.py`, ask where the user wants the skill created. If they do not specify a location, default to `$CODEX_HOME/skills`; when `CODEX_HOME` is unset, fall back to `~/.codex/skills` so the skill is auto-discovered.
+Use `create_skill_info` for a new Skill:
 
-When creating a new skill from scratch, always run the `init_skill.py` script. The script conveniently generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
+- Provide `title`, `name`, and `description`.
+- Keep `name` and `description` aligned with `/SKILL.md` frontmatter.
+- Record the returned `resource_id` and `draft_version`; every asset upload for this draft needs both values.
 
-Usage:
+Use `get_skill_info` for an existing Skill:
 
-```bash
-scripts/init_skill.py <skill-name> --path <output-directory> [--resources scripts,references,assets] [--examples]
-```
+- Provide `resource_id`.
+- Read the returned `resource_id`, `name`, `description`, `source_type`, `version`, and `draft_version`.
+- Use the returned `draft_version` for asset uploads.
 
-Examples:
+Use `update_skill_info` only when existing metadata must change:
 
-```bash
-scripts/init_skill.py my-skill --path "${CODEX_HOME:-$HOME/.codex}/skills"
-scripts/init_skill.py my-skill --path "${CODEX_HOME:-$HOME/.codex}/skills" --resources scripts,references
-scripts/init_skill.py my-skill --path ~/work/skills --resources scripts --examples
-```
+- Provide `resource_id`, `name`, and `description`.
+- Keep `name` and `description` aligned with `/SKILL.md` frontmatter.
+- If the next step needs a current `draft_version`, call `get_skill_info` after updating.
 
-The script:
+These tools only create, read, or update Skill information. They do not upload files and never publish.
 
-- Creates the skill directory at the specified path
-- Generates a SKILL.md template with proper frontmatter and TODO placeholders
-- Creates `agents/openai.yaml` using agent-generated `display_name`, `short_description`, and `default_prompt` passed via `--interface key=value`
-- Optionally creates resource directories based on `--resources`
-- Optionally adds example files when `--examples` is set
+### Step 4: Edit the Skill and Upload Draft Assets
 
-After initialization, customize the SKILL.md and add resources as needed. If you used `--examples`, replace or delete placeholder files.
-
-Generate `display_name`, `short_description`, and `default_prompt` by reading the skill, then pass them as `--interface key=value` to `init_skill.py` or regenerate with:
-
-```bash
-scripts/generate_openai_yaml.py <path/to/skill-folder> --interface key=value
-```
-
-Only include other optional interface fields when the user explicitly provides them. For full field descriptions and examples, see references/openai_yaml.md.
-
-### Step 4: Edit the Skill
-
-When editing the (newly-generated or existing) skill, remember that the skill is being created for another instance of Codex to use. Include information that would be beneficial and non-obvious to Codex. Consider what procedural knowledge, domain-specific details, or reusable assets would help another Codex instance execute these tasks more effectively.
-
-After substantial revisions, or if the skill is particularly tricky, you should use subagents to forward-test the skill on realistic tasks or artifacts. When doing so, pass the artifact under validation rather than your diagnosis of what is wrong, and keep the prompt generic enough that success depends on transferable reasoning rather than hidden ground truth.
+When editing the new or existing skill, remember that the skill is being created for another instance of Wisepen to use. Include information that would be beneficial and non-obvious to Wisepen. Consider what procedural knowledge, domain-specific details, or reusable assets would help another Wisepen instance execute these tasks more effectively.
 
 #### Start with Reusable Skill Contents
 
-To begin implementation, start with the reusable resources identified above: `scripts/`, `references/`, and `assets/` files. Note that this step may require user input. For example, when implementing a `brand-guidelines` skill, the user may need to provide brand assets or templates to store in `assets/`, or documentation to store in `references/`.
+To begin implementation, start with the reusable resources identified above: `scripts/`, `references/`, and `assets/` files. Prepare each resource as a POSIX directory path, file name, and text content. Note that this step may require user input. For example, when implementing a `brand-guidelines` skill, the user may need to provide brand assets or templates to store in `assets/`, or documentation to store in `references/`.
 
-Added scripts must be tested by actually running them to ensure there are no bugs and that the output matches what is expected. If there are many similar scripts, only a representative sample needs to be tested to ensure confidence that they all work while balancing time to completion.
+Added scripts should be written so they can be run and tested by the eventual Skill user. If local execution is available during Skill creation, run representative scripts to ensure there are no obvious bugs and that outputs match expectations.
 
-If you used `--examples`, delete any placeholder files that are not needed for the skill. Only create resource directories that are actually required.
+Only include resource files that are actually required.
 
 #### Update SKILL.md
 
@@ -348,10 +336,10 @@ If you used `--examples`, delete any placeholder files that are not needed for t
 Write the YAML frontmatter with `name` and `description`:
 
 - `name`: The skill name
-- `description`: This is the primary triggering mechanism for your skill, and helps Codex understand when to use the skill.
+- `description`: This is the primary triggering mechanism for your skill, and helps Wisepen understand when to use the skill.
   - Include both what the Skill does and specific triggers/contexts for when to use it.
-  - Include all "when to use" information here - Not in the body. The body is only loaded after triggering, so "When to Use This Skill" sections in the body are not helpful to Codex.
-  - Example description for a `docx` skill: "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. Use when Codex needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks"
+  - Include all "when to use" information here - Not in the body. The body is only loaded after triggering, so "When to Use This Skill" sections in the body are not helpful to Wisepen.
+  - Example description for a `docx` skill: "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. Use when Wisepen needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks"
 
 Do not include any other fields in YAML frontmatter.
 
@@ -359,58 +347,42 @@ Do not include any other fields in YAML frontmatter.
 
 Write instructions for using the skill and its bundled resources.
 
+#### Upload Draft Assets
+
+Use `upload_skill_draft_asset` once per file:
+
+- To modify an existing draft file, upload the updated content for that file; to add a draft file, upload the new file content.
+- Pass `path` and `name` separately, such as `path="/"`, `name="SKILL.md"`, `path="/references"`, `name="schema.md"`, or `path="/scripts"`, `name="rotate_pdf.py"`.
+- Supported text asset extensions are `.md`, `.py`, `.txt`, `.json`, `.yaml`, `.yml`, and `.toml`.
+- `path` must be `/` or an absolute POSIX directory path such as `/references`; `name` must be a file name only, not a path, and must not be `.` or `..`.
+- Upload one file per tool call. Do not batch multiple files into a single call.
+
+The tool does light `/SKILL.md` structure checks and validates asset path/name before uploading. It saves draft assets only and never publishes.
+
 ### Step 5: Validate the Skill
 
-Once development of the skill is complete, validate the skill folder to catch basic issues early:
+Once development of the skill is complete, validate the draft content to catch basic issues early:
 
-```bash
-scripts/quick_validate.py <path/to/skill-folder>
-```
-
-The validation script checks YAML frontmatter format, required fields, and naming rules. If validation fails, fix the reported issues and run the command again.
+- Confirm `/SKILL.md` starts with YAML frontmatter containing only `name` and `description`.
+- Confirm `name` is lowercase hyphen-case and matches the metadata saved with `create_skill_info` or `update_skill_info`.
+- Confirm `description` includes both what the Skill does and specific triggers or contexts for when to use it.
+- Confirm the body is non-empty, concise, and points to any references or scripts by exact path/name.
+- Confirm every referenced bundled resource was uploaded with `upload_skill_draft_asset`.
+- If scripts are included and execution is possible in the current environment, run a representative sample.
 
 ### Step 6: Iterate
 
-After testing the skill, you may detect the skill is complex enough that it requires forward-testing; or users may request improvements.
+After testing the skill, you may detect that it needs clearer instructions, more focused references, or fewer resources; or users may request improvements.
 
 User testing often this happens right after using the skill, with fresh context of how the skill performed.
 
-**Forward-testing and iteration workflow:**
+**Iteration workflow:**
 
 1. Use the skill on real tasks
 2. Notice struggles or inefficiencies
 3. Identify how SKILL.md or bundled resources should be updated
-4. Implement changes and test again
-5. Forward-test if it is reasonable and appropriate
+4. Use `update_skill_info` if `name` or `description` changed
+5. Re-upload changed assets one file at a time
+6. Validate again with realistic prompts and raw artifacts
 
-## Forward-testing
-
-To forward-test, launch subagents as a way to stress test the skill with minimal context.
-Subagents should *not* know that they are being asked to test the skill.  They should be treated as
-an agent asked to perform a task by the user.  Prompts to subagents should look like:
-  `Use $skill-x at /path/to/skill-x to solve problem y`
-Not:
-  `Review the skill at /path/to/skill-x; pretend a user asks you to...`
-
-Decision rule for forward-testing:
-  - Err on the side of forward-testing
-  - Ask for approval if you think there's a risk that forward-testing would:
-    * take a long time,
-    * require additional approvals from the user, or
-    * modify live production systems
-
-  In these cases, show the user your proposed prompt and request (1) a yes/no decision, and
-  (2) any suggested modifictions.
-
-Considerations when forward-testing:
-   - use fresh threads for independent passes
-   - pass the skill, and a request in a similar way the user would.
-   - pass raw artifacts, not your conclusions
-   - avoid showing expected answers or intended fixes
-   - rebuild context from source artifacts after each iteration
-   - review the subagent's output and reasoning and emitted artifacts
-   - avoid leaving artifacts the agent can find on disk between iterations;
-     clean up subagents' artifacts to avoid additional contamination.
-
-If forward-testing only succeeds when subagents see leaked context, tighten the skill or the
-forward-testing setup before trusting the result.
+When validating, pass the skill and a request in a similar way the user would. Prefer raw artifacts over conclusions, avoid showing expected answers or intended fixes, and rebuild context from source artifacts after each iteration.
