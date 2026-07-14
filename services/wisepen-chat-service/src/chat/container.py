@@ -23,9 +23,11 @@ from chat.core.persistence import (
     MongoSessionRepository,
     MongoMessageRepository,
     MongoModelRepository,
+    MongoMcpServerConfigRepository,
     MongoProviderRepository,
     MongoToolConfigRepository,
     RedisHotContext,
+    RedisMcpToolDiscoveryCache,
 )
 from chat.domain.repositories import ToolConfigRepository
 from chat.application.chat_turn_coordinator import ChatTurnCoordinator
@@ -33,16 +35,13 @@ from chat.application.agents import (
     DefaultAgentResolver,
 )
 from chat.application.tools.skill_tools.utils.skill_matcher import DefaultSkillMatcher
-from chat.application.tools.skill_tools import CreateSkillInfoTool
-from chat.application.tools.skill_tools import GetSkillInfoTool
 from chat.application.tools.skill_tools import LoadSkillAssetTool
 from chat.application.tools.skill_tools import LoadSkillTool
-from chat.application.tools.skill_tools import UpdateSkillInfoTool
-from chat.application.tools.skill_tools import UploadSkillDraftAssetTool
 from chat.application.tools.core import ToolRegistry
+from chat.application.tools.core.mcp import McpClient, McpToolCatalog, SystemMcpToolCatalog
 from chat.application.tools.session_tools.get_historical_chat_messages_tool import GetHistoricalChatMessagesTool
 from chat.core.config.nacos import nacos_client_manager
-from chat.service_client import FileStorageClient, AIAssetClient, ResourceClient
+from chat.service_client import FileStorageClient, AIAssetClient, McpServiceClient, ResourceClient
 from common.cloud.service_discovery import ServiceDiscovery
 from common.http.rpc_client import RpcClient
 from common.kafka.producer import KafkaProducerClient
@@ -56,9 +55,15 @@ async def _provide_nacos_naming() -> NacosNamingService:
 def _build_registry(
         tool_providers: List[providers.Provider],
         tool_config_repo: ToolConfigRepository,
+        mcp_tool_catalog: McpToolCatalog,
+        system_mcp_tool_catalog: SystemMcpToolCatalog,
 ) -> ToolRegistry:
     """工厂函数：组装并返回已注册所有工具的 ToolRegistry 实例。"""
-    registry = ToolRegistry(tool_config_repo=tool_config_repo)
+    registry = ToolRegistry(
+        tool_config_repo=tool_config_repo,
+        mcp_tool_catalog=mcp_tool_catalog,
+        system_mcp_tool_catalog=system_mcp_tool_catalog,
+    )
     for provider in tool_providers:
         registry.register(provider)
     return registry
@@ -97,7 +102,9 @@ class Container(containers.DeclarativeContainer):
     model_repo = providers.Singleton(MongoModelRepository)
     provider_repo = providers.Singleton(MongoProviderRepository)
     tool_config_repo = providers.Singleton(MongoToolConfigRepository)
+    mcp_server_config_repo = providers.Singleton(MongoMcpServerConfigRepository)
     hot_context_repo = providers.Singleton(RedisHotContext)
+    mcp_tool_discovery_cache_repo = providers.Singleton(RedisMcpToolDiscoveryCache)
 
     # 内部 RPC：Nacos 服务发现 + 通用 httpx 客户端 + file-storage typed facade
     service_discovery = providers.Singleton(
@@ -126,6 +133,27 @@ class Container(containers.DeclarativeContainer):
     resource_client = providers.Singleton(
         ResourceClient,
         rpc=rpc_client,
+    )
+    mcp_service_client = providers.Singleton(
+        McpServiceClient,
+        discovery=service_discovery,
+        from_source_secret=settings.FROM_SOURCE_SECRET,
+        timeout=settings.RPC_DEFAULT_TIMEOUT,
+        default_strategy=settings.RPC_LB_STRATEGY,
+    )
+    mcp_client = providers.Singleton(
+        McpClient,
+        timeout=settings.MCP_DEFAULT_TIMEOUT_SECONDS,
+    )
+    mcp_tool_catalog = providers.Singleton(
+        McpToolCatalog,
+        mcp_client=mcp_client,
+        mcp_tool_discovery_cache_repo=mcp_tool_discovery_cache_repo,
+        mcp_server_config_repo=mcp_server_config_repo,
+    )
+    system_mcp_tool_catalog = providers.Singleton(
+        SystemMcpToolCatalog,
+        mcp_client=mcp_service_client,
     )
 
     # OssFileLoader
@@ -169,37 +197,18 @@ class Container(containers.DeclarativeContainer):
         resource_client=resource_client,
         file_loader=oss_file_loader,
     )
-    create_skill_info_tool = providers.Singleton(
-        CreateSkillInfoTool,
-        ai_asset_client=ai_asset_client,
-    )
-    get_skill_info_tool = providers.Singleton(
-        GetSkillInfoTool,
-        ai_asset_client=ai_asset_client,
-    )
-    update_skill_info_tool = providers.Singleton(
-        UpdateSkillInfoTool,
-        ai_asset_client=ai_asset_client,
-    )
-    upload_skill_draft_asset_tool = providers.Singleton(
-        UploadSkillDraftAssetTool,
-        ai_asset_client=ai_asset_client,
-    )
-
     tool_providers = providers.List(
         search_history_tool,
         load_skill_tool,
         load_skill_asset_tool,
-        create_skill_info_tool,
-        get_skill_info_tool,
-        update_skill_info_tool,
-        upload_skill_draft_asset_tool,
     )
 
     tool_registry = providers.Singleton(
         _build_registry,
         tool_providers=tool_providers,
         tool_config_repo=tool_config_repo,
+        mcp_tool_catalog=mcp_tool_catalog,
+        system_mcp_tool_catalog=system_mcp_tool_catalog,
     )
 
     # Application 层组件
