@@ -1,0 +1,21 @@
+[project]
+name = "wisepen-mcp-service"
+version = "0.1.0"
+description = "WisePen MCP Microservice: AI capability tools"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Jiazheng Sun", email = "jzsun24@m.fudan.edu.cn" }
+]
+dependencies = [
+    "fastapi",
+    "pydantic",
+    "pydantic-settings",
+    "uvicorn[standard]",
+    "dependency_injector",
+    "httpx",
+    "mcp>=1.27,<2",
+    "pyyaml",
+    "nacos-sdk-python",
+    "wisepen-common",
+]
